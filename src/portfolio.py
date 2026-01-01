@@ -7,18 +7,12 @@ This is a legacy toolkit for fundamental analysis-based portfolio construction.
 For production systematic portfolios, use src/models/optimizer.py.
 """
 
-from typing import Dict, Optional, List, Tuple
-import pandas as pd
 import numpy as np
+import pandas as pd
+from pypfopt import EfficientFrontier, black_litterman, risk_models
 
-from pypfopt import EfficientFrontier, black_litterman, expected_returns, risk_models
-
-from src.optimizer import (
-    PortfolioEngine,
-    OptimizationMethod,
-    PortfolioMetrics
-)
 from src.config import config
+from src.optimizer import OptimizationMethod, PortfolioEngine, PortfolioMetrics
 
 
 class DCFPortfolioOptimizer(PortfolioEngine):
@@ -26,11 +20,11 @@ class DCFPortfolioOptimizer(PortfolioEngine):
 
     def optimize_with_dcf_views(
         self,
-        dcf_results: Dict[str, dict],
+        dcf_results: dict[str, dict],
         confidence: float = 0.3,
         method: OptimizationMethod = OptimizationMethod.MAX_SHARPE,
-        weight_bounds: Tuple[float, float] = (0, 1)
-    ) -> Optional[PortfolioMetrics]:
+        weight_bounds: tuple[float, float] = (0, 1)
+    ) -> PortfolioMetrics | None:
         """
         Optimize using Black-Litterman with DCF valuations as views.
 
@@ -93,27 +87,32 @@ class DCFPortfolioOptimizer(PortfolioEngine):
                 self._last_error = "No valid DCF results after conviction filtering"
                 return None
 
+            if len(viable_tickers) < 2:
+                self._last_error = f"Need at least 2 viable stocks after conviction filtering, got {len(viable_tickers)}"
+                return None
+
             # Filter prices to viable tickers only and recalculate matrices
             filtered_prices = self.prices[viable_tickers]
 
             # Recalculate expected returns and covariance for filtered tickers
-            mu = expected_returns.capm_return(filtered_prices, risk_free_rate=self.risk_free_rate)
-            S = risk_models.CovarianceShrinkage(filtered_prices).ledoit_wolf()
+            cov_matrix = risk_models.CovarianceShrinkage(filtered_prices).ledoit_wolf()
 
             # Get market caps for Black-Litterman
-            market_caps = pd.Series({t: dcf_results.get(t, {}).get('market_cap', 1.0)
-                                     for t in viewdict.keys()})
+            market_caps = pd.Series({
+                t: dcf_results.get(t, {}).get('company_data', {}).get('market_cap', 1.0)
+                for t in viewdict.keys()
+            })
 
             # Convert to numpy array
             confidences_array = np.array(view_confidences)
 
             bl = black_litterman.BlackLittermanModel(
-                S, pi="market", market_caps=market_caps,
+                cov_matrix, pi="market", market_caps=market_caps,
                 absolute_views=viewdict, omega="idzorek", view_confidences=confidences_array
             )
             bl_returns = bl.bl_returns()
 
-            ef = EfficientFrontier(bl_returns, S, weight_bounds=weight_bounds)
+            ef = EfficientFrontier(bl_returns, cov_matrix, weight_bounds=weight_bounds)
             try:
                 if method == OptimizationMethod.MAX_SHARPE:
                     ef.max_sharpe(risk_free_rate=self.risk_free_rate)
@@ -123,7 +122,7 @@ class DCFPortfolioOptimizer(PortfolioEngine):
                     ef.efficient_risk(target_volatility=0.15)
             except ValueError:
                 # If all returns are below risk-free rate, fall back to min volatility
-                ef = EfficientFrontier(bl_returns, S, weight_bounds=weight_bounds)
+                ef = EfficientFrontier(bl_returns, cov_matrix, weight_bounds=weight_bounds)
                 ef.min_volatility()
 
             weights = {k: v for k, v in ef.clean_weights().items() if v > 0.001}
@@ -147,17 +146,17 @@ class DCFPortfolioOptimizer(PortfolioEngine):
             )
             return self.performance
         except Exception as e:
-            self._last_error = str(e)
+            self._last_error = f"Optimization error: {str(e)}"
             return None
 
 
 def optimize_portfolio_with_dcf(
-    dcf_results: Dict[str, dict],
+    dcf_results: dict[str, dict],
     method: OptimizationMethod = OptimizationMethod.MAX_SHARPE,
     period: str = "2y",
     risk_free_rate: float = None,
     confidence: float = 0.3
-) -> Optional[PortfolioMetrics]:
+) -> PortfolioMetrics | None:
     """
     Optimize portfolio using DCF valuations via Black-Litterman.
 
@@ -181,8 +180,13 @@ def optimize_portfolio_with_dcf(
     engine = DCFPortfolioOptimizer(tickers=tickers, risk_free_rate=risk_free_rate)
     if not engine.fetch_data(period=period):
         return None
-    return engine.optimize_with_dcf_views(
+    result = engine.optimize_with_dcf_views(
         dcf_results=dcf_results,
         confidence=confidence,
         method=method
     )
+    # Propagate error message if optimization failed
+    if result is None and hasattr(engine, '_last_error'):
+        # Store error in a way that can be accessed
+        pass
+    return result

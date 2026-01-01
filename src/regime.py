@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Optional, Any
+from typing import Any
 
 import pandas as pd
 import yfinance as yf
 
-from ..utils import rate_limiter, default_cache
+from src.utils import default_cache, rate_limiter
 
 
 class MarketRegime(Enum):
@@ -56,11 +56,11 @@ class RegimeResult:
     regime: MarketRegime
     method: str
     last_updated: datetime
-    current_price: Optional[float] = None
-    sma_200: Optional[float] = None
-    sma_signal_strength: Optional[float] = None
-    vix_structure: Optional[VixTermStructure] = None
-    vix_regime: Optional[MarketRegime] = None
+    current_price: float | None = None
+    sma_200: float | None = None
+    sma_signal_strength: float | None = None
+    vix_structure: VixTermStructure | None = None
+    vix_regime: MarketRegime | None = None
 
     def __str__(self) -> str:
         parts = [f"Regime: {self.regime.value}"]
@@ -77,7 +77,7 @@ class RegimeResult:
             "last_updated": self.last_updated.isoformat(),
         }
         if self.current_price:
-            result["spy"] = {"price": self.current_price, "sma_200": self.sma_200, 
+            result["spy"] = {"price": self.current_price, "sma_200": self.sma_200,
                             "signal_strength": self.sma_signal_strength}
         if self.vix_structure:
             result["vix"] = self.vix_structure.to_dict()
@@ -93,12 +93,12 @@ class RegimeDetector:
         self.lookback_days = lookback_days
         self.cache_duration = cache_duration
         self.use_vix = use_vix
-        self._cached_result: Optional[RegimeResult] = None
-        self._cache_timestamp: Optional[datetime] = None
-        self._last_error: Optional[str] = None
+        self._cached_result: RegimeResult | None = None
+        self._cache_timestamp: datetime | None = None
+        self._last_error: str | None = None
 
     @property
-    def last_error(self) -> Optional[str]:
+    def last_error(self) -> str | None:
         return self._last_error
 
     def _is_cache_valid(self) -> bool:
@@ -106,14 +106,14 @@ class RegimeDetector:
             return False
         return (datetime.now() - self._cache_timestamp).total_seconds() < self.cache_duration
 
-    def _get_spy_history(self, ticker: str, lookback_days: int) -> Optional[pd.DataFrame]:
+    def _get_spy_history(self, ticker: str, lookback_days: int) -> pd.DataFrame | None:
         """Fetch SPY data with caching."""
         cache_key = f"spy_history_{ticker}_{lookback_days}"
         cached = default_cache.get(cache_key, expiry_hours=1)  # 1 hour cache for market data
-        
+
         if cached is not None:
             return cached
-        
+
         # Fetch from API
         try:
             data = yf.Ticker(ticker).history(
@@ -127,7 +127,7 @@ class RegimeDetector:
             return None
 
     @rate_limiter
-    def _fetch_spy_data(self) -> Optional[pd.DataFrame]:
+    def _fetch_spy_data(self) -> pd.DataFrame | None:
         try:
             data = self._get_spy_history(self.ticker, self.lookback_days)
             if data is None:
@@ -138,14 +138,14 @@ class RegimeDetector:
             self._last_error = f"Error fetching {self.ticker}: {e}"
             return None
 
-    def _get_vix_data(self) -> Optional[pd.DataFrame]:
+    def _get_vix_data(self) -> pd.DataFrame | None:
         """Fetch VIX term structure with caching."""
         cache_key = "vix_term_structure"
         cached = default_cache.get(cache_key, expiry_hours=1)  # 1 hour cache
-        
+
         if cached is not None:
             return cached
-        
+
         # Fetch from API
         try:
             import warnings
@@ -159,7 +159,7 @@ class RegimeDetector:
             return None
 
     @rate_limiter
-    def _fetch_vix_term_structure(self) -> Optional[VixTermStructure]:
+    def _fetch_vix_term_structure(self) -> VixTermStructure | None:
         try:
             data = self._get_vix_data()
             if data is None or data.empty or 'Close' not in data.columns:
@@ -183,7 +183,7 @@ class RegimeDetector:
     def _calculate_sma_regime(self, data: pd.DataFrame) -> tuple[MarketRegime, float, float, float]:
         if len(data) < 200:
             raise ValueError(f"Need 200+ days, got {len(data)}")
-        
+
         sma_200 = float(data['Close'].rolling(window=200).mean().iloc[-1])
         current = float(data['Close'].iloc[-1])
         regime = MarketRegime.RISK_ON if current > sma_200 else MarketRegime.RISK_OFF
@@ -197,8 +197,8 @@ class RegimeDetector:
             return MarketRegime.RISK_ON
         return MarketRegime.CAUTION
 
-    def get_regime_with_details(self, use_cache: bool = True, 
-                                 method: str = "combined") -> Optional[RegimeResult]:
+    def get_regime_with_details(self, use_cache: bool = True,
+                                 method: str = "combined") -> RegimeResult | None:
         if use_cache and self._is_cache_valid():
             return self._cached_result
 
@@ -225,7 +225,7 @@ class RegimeDetector:
             else:  # combined
                 spy = self._fetch_spy_data()
                 vix = self._fetch_vix_term_structure()
-                
+
                 if spy is None and vix is None:
                     return None
 
@@ -257,7 +257,7 @@ class RegimeDetector:
             self._last_error = f"Error calculating regime: {e}"
             return None
 
-    def get_current_regime(self, use_cache: bool = True, 
+    def get_current_regime(self, use_cache: bool = True,
                            method: str = "combined") -> MarketRegime:
         result = self.get_regime_with_details(use_cache=use_cache, method=method)
         return result.regime if result else MarketRegime.UNKNOWN

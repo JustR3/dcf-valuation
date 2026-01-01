@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Dict, List, Tuple
 from enum import Enum
-import time
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import yfinance as yf
-from pypfopt import EfficientFrontier, risk_models, expected_returns, black_litterman
+from pypfopt import EfficientFrontier, expected_returns, risk_models
 from pypfopt.discrete_allocation import DiscreteAllocation, get_latest_prices
 
-from config import config
-from ..utils import default_cache
+from src.config import config
+from src.utils import default_cache
 
 
 class OptimizationMethod(Enum):
@@ -34,14 +33,14 @@ class PortfolioMetrics:
     expected_annual_return: float
     annual_volatility: float
     sharpe_ratio: float
-    weights: Dict[str, float]
+    weights: dict[str, float]
     optimization_method: str
     # Additional risk metrics
-    sortino_ratio: Optional[float] = None
-    calmar_ratio: Optional[float] = None
-    max_drawdown: Optional[float] = None
-    var_95: Optional[float] = None  # Value at Risk (95% confidence)
-    cvar_95: Optional[float] = None  # Conditional VaR (Expected Shortfall)
+    sortino_ratio: float | None = None
+    calmar_ratio: float | None = None
+    max_drawdown: float | None = None
+    var_95: float | None = None  # Value at Risk (95% confidence)
+    cvar_95: float | None = None  # Conditional VaR (Expected Shortfall)
 
     def to_dict(self) -> dict:
         return {
@@ -61,7 +60,7 @@ class PortfolioMetrics:
 @dataclass
 class DiscretePortfolio:
     """Discrete share allocation."""
-    allocation: Dict[str, int]
+    allocation: dict[str, int]
     leftover: float
     total_value: float
 
@@ -73,16 +72,16 @@ class DiscretePortfolio:
 class PortfolioEngine:
     """Portfolio optimization engine using mean-variance optimization."""
 
-    def __init__(self, tickers: List[str], risk_free_rate: Optional[float] = None):
+    def __init__(self, tickers: list[str], risk_free_rate: float | None = None):
         self.tickers = [t.upper() for t in tickers]
         self.risk_free_rate = risk_free_rate if risk_free_rate is not None else config.DEFAULT_RISK_FREE_RATE
         self._last_call = 0.0
-        self.prices: Optional[pd.DataFrame] = None
-        self.expected_returns: Optional[pd.Series] = None
-        self.cov_matrix: Optional[pd.DataFrame] = None
-        self.optimized_weights: Optional[Dict[str, float]] = None
-        self.performance: Optional[PortfolioMetrics] = None
-        self._last_error: Optional[str] = None
+        self.prices: pd.DataFrame | None = None
+        self.expected_returns: pd.Series | None = None
+        self.cov_matrix: pd.DataFrame | None = None
+        self.optimized_weights: dict[str, float] | None = None
+        self.performance: PortfolioMetrics | None = None
+        self._last_error: str | None = None
 
     def _rate_limit(self) -> None:
         elapsed = time.time() - self._last_call
@@ -90,34 +89,34 @@ class PortfolioEngine:
             time.sleep(1.0 - elapsed)
         self._last_call = time.time()
 
-    def _get_historical_prices(self, tickers: List[str], period: str = "2y",
-                               start: Optional[datetime] = None,
-                               end: Optional[datetime] = None) -> Optional[pd.DataFrame]:
+    def _get_historical_prices(self, tickers: list[str], period: str = "2y",
+                               start: datetime | None = None,
+                               end: datetime | None = None) -> pd.DataFrame | None:
         """Fetch historical prices with caching."""
         # Create cache key from parameters
         cache_key = f"prices_{'_'.join(sorted(tickers))}_{period}"
         if start and end:
             cache_key = f"prices_{'_'.join(sorted(tickers))}_{start.date()}_{end.date()}"
-        
+
         cached = default_cache.get(cache_key)
         if cached is not None:
             return cached
-        
+
         # Fetch from API
         try:
             self._rate_limit()
             data = (yf.download(tickers, start=start, end=end, progress=False, auto_adjust=True)
                     if start and end else
                     yf.download(tickers, period=period, progress=False, auto_adjust=True))
-            
+
             if data is not None and not data.empty:
                 default_cache.set(cache_key, data)
             return data
         except Exception:
             return None
 
-    def fetch_data(self, period: str = "2y", start: Optional[datetime] = None,
-                   end: Optional[datetime] = None) -> bool:
+    def fetch_data(self, period: str = "2y", start: datetime | None = None,
+                   end: datetime | None = None) -> bool:
         """Fetch historical price data for all tickers."""
         try:
             data = self._get_historical_prices(self.tickers, period, start, end)
@@ -185,13 +184,13 @@ class PortfolioEngine:
             return False
 
     def optimize(self, method: OptimizationMethod = OptimizationMethod.MAX_SHARPE,
-                 target_volatility: Optional[float] = None,
-                 weight_bounds: Optional[Tuple[float, float]] = None) -> Optional[PortfolioMetrics]:
+                 target_volatility: float | None = None,
+                 weight_bounds: tuple[float, float] | None = None) -> PortfolioMetrics | None:
         """Optimize portfolio weights."""
         # Use config defaults for weight bounds
         if weight_bounds is None:
             weight_bounds = (config.MIN_POSITION_SIZE, config.MAX_POSITION_SIZE)
-        
+
         try:
             if self.expected_returns is None and not self.calculate_expected_returns():
                 return None
@@ -206,10 +205,10 @@ class PortfolioEngine:
                               for t2 in self.tickers) for t1 in self.tickers)
                 vol = np.sqrt(var)
                 self.optimized_weights = weights
-                
+
                 # Calculate comprehensive risk metrics
                 risk_metrics = self.calculate_risk_metrics(weights)
-                
+
                 self.performance = PortfolioMetrics(
                     expected_annual_return=ret * 100,
                     annual_volatility=vol * 100,
@@ -245,10 +244,10 @@ class PortfolioEngine:
             weights = ef.clean_weights()
             perf = ef.portfolio_performance(verbose=False, risk_free_rate=self.risk_free_rate)
             self.optimized_weights = weights
-            
+
             # Calculate comprehensive risk metrics
             risk_metrics = self.calculate_risk_metrics(weights)
-            
+
             self.performance = PortfolioMetrics(
                 expected_annual_return=perf[0] * 100,
                 annual_volatility=perf[1] * 100,
@@ -266,55 +265,55 @@ class PortfolioEngine:
             self._last_error = str(e)
             return None
 
-    def calculate_risk_metrics(self, weights: Dict[str, float]) -> dict:
+    def calculate_risk_metrics(self, weights: dict[str, float]) -> dict:
         """Calculate comprehensive risk metrics for a portfolio.
-        
+
         Args:
             weights: Portfolio weights dictionary {ticker: weight}
-            
+
         Returns:
             dict with VaR, CVaR, Sortino, Calmar, and Max Drawdown
         """
         if self.prices is None or len(self.prices) == 0:
             return {}
-        
+
         try:
             # Calculate portfolio returns
             returns = self.prices.pct_change().dropna()
             weights_series = pd.Series(weights)
-            
+
             # Align tickers
             common_tickers = list(set(weights.keys()) & set(returns.columns))
             if not common_tickers:
                 return {}
-            
+
             weights_series = weights_series[common_tickers]
             returns = returns[common_tickers]
-            
+
             # Portfolio daily returns
             portfolio_returns = (returns * weights_series).sum(axis=1)
-            
+
             # Value at Risk (95% confidence) - 5th percentile loss
             var_95 = np.percentile(portfolio_returns, 5)
-            
+
             # Conditional VaR (Expected Shortfall) - average of losses below VaR
             cvar_95 = portfolio_returns[portfolio_returns <= var_95].mean()
-            
+
             # Maximum Drawdown
             cumulative = (1 + portfolio_returns).cumprod()
             running_max = cumulative.cummax()
             drawdown = (cumulative - running_max) / running_max
             max_drawdown = drawdown.min()
-            
+
             # Sortino Ratio (uses downside deviation instead of total volatility)
             downside_returns = portfolio_returns[portfolio_returns < 0]
             downside_std = downside_returns.std() * np.sqrt(252) if len(downside_returns) > 0 else 0.0001
             mean_return = portfolio_returns.mean() * 252
             sortino_ratio = mean_return / downside_std if downside_std > 0 else 0
-            
+
             # Calmar Ratio (return / max drawdown)
             calmar_ratio = mean_return / abs(max_drawdown) if max_drawdown < 0 else 0
-            
+
             return {
                 'var_95': var_95,
                 'cvar_95': cvar_95,
@@ -325,7 +324,7 @@ class PortfolioEngine:
         except Exception:
             return {}
 
-    def get_discrete_allocation(self, total_portfolio_value: float) -> Optional[DiscretePortfolio]:
+    def get_discrete_allocation(self, total_portfolio_value: float) -> DiscretePortfolio | None:
         """Calculate discrete share allocation."""
         try:
             if self.optimized_weights is None:
@@ -341,7 +340,7 @@ class PortfolioEngine:
             self._last_error = str(e)
             return None
 
-    def get_last_error(self) -> Optional[str]:
+    def get_last_error(self) -> str | None:
         return self._last_error
 
     def to_dict(self) -> dict:
@@ -354,8 +353,8 @@ class PortfolioEngine:
         return result
 
 
-def optimize_portfolio(tickers: List[str], method: OptimizationMethod = OptimizationMethod.MAX_SHARPE,
-                       period: str = "2y", risk_free_rate: float = 0.04) -> Optional[PortfolioMetrics]:
+def optimize_portfolio(tickers: list[str], method: OptimizationMethod = OptimizationMethod.MAX_SHARPE,
+                       period: str = "2y", risk_free_rate: float = 0.04) -> PortfolioMetrics | None:
     """Quick portfolio optimization."""
     engine = PortfolioEngine(tickers=tickers, risk_free_rate=risk_free_rate)
     if not engine.fetch_data(period=period):
@@ -363,8 +362,8 @@ def optimize_portfolio(tickers: List[str], method: OptimizationMethod = Optimiza
     return engine.optimize(method=method)
 
 
-def get_efficient_frontier_points(tickers: List[str], num_points: int = 100,
-                                  period: str = "2y") -> Optional[pd.DataFrame]:
+def get_efficient_frontier_points(tickers: list[str], num_points: int = 100,
+                                  period: str = "2y") -> pd.DataFrame | None:
     """Calculate points on the efficient frontier."""
     engine = PortfolioEngine(tickers=tickers)
     if not engine.fetch_data(period=period):
