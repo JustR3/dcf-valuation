@@ -12,7 +12,7 @@ This toolkit implements sophisticated DCF valuation with Monte Carlo simulation,
 - **Free Cash Flow Projection**: 5-year forecasts with analyst estimates
 - **WACC Calculation**: CAPM-based with sector-specific betas
 - **Terminal Value Methods**: Perpetuity growth & exit multiples
-- **Monte Carlo Simulation**: 3,000-5,000 iterations for probabilistic valuation
+- **Monte Carlo Simulation**: 5,000-10,000 iterations for probabilistic valuation
 - **Reverse DCF**: Calculate implied growth rates from current price
 - **Sensitivity Analysis**: Stress testing across growth/WACC scenarios
 - **EV/Sales Fallback**: Relative valuation for negative FCF companies
@@ -152,7 +152,7 @@ pytest tests/
 │ Upside              │          +13.01% │
 │ WACC                │            8.50% │
 │                     │                  │
-│ Monte Carlo (3,000) │                  │
+│ Monte Carlo (5,000) │                  │
 │   Mean              │          $195.78 │
 │   Median            │          $197.12 │
 │   10th Percentile   │          $165.44 │
@@ -166,7 +166,7 @@ Conviction: Buy
 
 Edit [src/config.py](src/config.py) to customize:
 
-- Monte Carlo iterations (default: 3,000)
+- Monte Carlo iterations (default: 5,000)
 - Growth rate bounds (-50% to +100%)
 - WACC parameters (risk-free rate, market premium)
 - Terminal growth rate (default: 2.5%)

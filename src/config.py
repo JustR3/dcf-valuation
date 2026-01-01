@@ -8,9 +8,9 @@ class AppConfig:
     """Application-wide configuration constants."""
 
     # Monte Carlo Simulation
-    MONTE_CARLO_ITERATIONS: int = 3000
+    MONTE_CARLO_ITERATIONS: int = 5000
     MONTE_CARLO_SEED: int = 42
-    MONTE_CARLO_HIGH_PRECISION_ITERATIONS: int = 5000
+    MONTE_CARLO_HIGH_PRECISION_ITERATIONS: int = 10000
 
     # DCF Valuation Bounds
     MIN_GROWTH_RATE: float = -0.50  # -50% (allow real declines)

@@ -732,7 +732,7 @@ class DCFEngine:
         a distribution of possible values. Useful for risk assessment.
 
         Args:
-            iterations: Number of Monte Carlo runs (default 5000)
+            iterations: Number of Monte Carlo runs (default 5000, max 10000 for high-precision)
             growth, wacc, term_growth, years: Base case parameters
             terminal_method: Terminal value method
             exit_multiple: Exit multiple for terminal value
