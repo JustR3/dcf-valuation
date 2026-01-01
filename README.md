@@ -203,29 +203,28 @@ sensitivity = engine.sensitivity_analysis()
 # 2D grid of fair values
 ```
 
-## 🤝 Contributing
+## 🙏 Acknowledgments
 
-Contributions welcome! Please:
+This project builds upon the foundational work of leading academics and researchers in finance and valuation:
 
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Submit a pull request
+### Academic Data Sources
+
+- **[Professor Aswath Damodaran](https://pages.stern.nyu.edu/~adamodar/)** (NYU Stern School of Business)  
+  Industry-level statistics including levered/unlevered betas, operating margins, and revenue growth rates across 96 industries. Professor Damodaran's datasets provide the academic "ground truth" for sector benchmarking and are updated quarterly. His work on corporate finance and valuation is widely considered the gold standard in the field.
+
+- **[Professor Robert Shiller](http://www.econ.yale.edu/~shiller/data.htm)** (Yale University, Nobel Laureate)  
+  Cyclically Adjusted Price-to-Earnings (CAPE) ratio dataset spanning over 140 years of US stock market history. The Shiller CAPE ratio is used to adjust WACC based on market valuation states, providing dynamic risk adjustment for different market conditions. Professor Shiller's pioneering work on market efficiency and behavioral finance earned him the Nobel Prize in Economics (2013).
+
+### Data Attribution
+
+All external data sources are used in accordance with their respective terms and are cited for academic and research purposes. Real-time financial data is sourced from:
+- **Federal Reserve Economic Data (FRED)** for macroeconomic indicators
+- **Yahoo Finance** via the yfinance library for company fundamentals
 
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-## 🙏 Acknowledgments
-
-- **Damodaran**: Sector priors and valuation methodologies
-- **PyPortfolioOpt**: Portfolio optimization framework
-- **yfinance**: Yahoo Finance API wrapper
-
-## 📧 Contact
-
-For questions or feedback, open an issue on GitHub.
-
 ---
 
-**Disclaimer:** This tool is for educational and research purposes. Not financial advice. Always conduct your own due diligence before making investment decisions.
+**Disclaimer:** This tool is for educational and research purposes only. It does not constitute financial advice, investment recommendations, or an offer to buy or sell securities. Always conduct your own due diligence and consult with qualified financial professionals before making investment decisions. Past performance does not guarantee future results.
