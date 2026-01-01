@@ -102,12 +102,16 @@ class PortfolioEngine:
         if cached is not None:
             return cached
 
-        # Fetch from API
+        # Fetch from API using yfinance batch download (much faster)
         try:
             self._rate_limit()
-            data = (yf.download(tickers, start=start, end=end, progress=False, auto_adjust=True)
+            
+            # yfinance supports batch downloads with threading - significantly faster!
+            data = (yf.download(tickers, start=start, end=end, progress=False, 
+                               auto_adjust=True, threads=True, group_by='column')
                     if start and end else
-                    yf.download(tickers, period=period, progress=False, auto_adjust=True))
+                    yf.download(tickers, period=period, progress=False, 
+                               auto_adjust=True, threads=True, group_by='column'))
 
             if data is not None and not data.empty:
                 default_cache.set(cache_key, data)

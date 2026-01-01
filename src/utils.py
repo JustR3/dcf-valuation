@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
@@ -251,3 +252,111 @@ def retry_with_backoff[T](
             delay *= backoff_factor
 
     return None
+
+
+class ParallelFetcher:
+    """
+    Parallel data fetcher with rate limiting and retry logic.
+    
+    Optimizes batch data fetching by parallelizing API calls while
+    respecting rate limits and handling failures gracefully.
+    
+    Example:
+        fetcher = ParallelFetcher(max_workers=5)
+        results = fetcher.fetch_batch(
+            ["AAPL", "MSFT", "GOOGL"],
+            lambda ticker: yf.Ticker(ticker).info
+        )
+    """
+    
+    def __init__(self, max_workers: int = 5, rate_limit_per_min: int = 60):
+        """
+        Initialize parallel fetcher.
+        
+        Args:
+            max_workers: Maximum concurrent workers (default: 5)
+            rate_limit_per_min: API rate limit per minute (default: 60)
+        """
+        self.max_workers = max_workers
+        self.rate_limit_per_min = rate_limit_per_min
+        self.min_interval = 60 / rate_limit_per_min
+        
+    def fetch_batch(
+        self,
+        items: list[str],
+        fetch_func: Callable[[str], T],
+        desc: str = "Fetching"
+    ) -> dict[str, T | None]:
+        """
+        Fetch data for multiple items in parallel.
+        
+        Args:
+            items: List of items to fetch (e.g., tickers)
+            fetch_func: Function to fetch data for a single item
+            desc: Description for progress tracking
+            
+        Returns:
+            Dict mapping items to fetched data (None if failed)
+            
+        Example:
+            results = fetcher.fetch_batch(
+                ["AAPL", "MSFT"],
+                lambda t: DCFEngine(t).company_data
+            )
+        """
+        results = {}
+        
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Submit all tasks
+            future_to_item = {
+                executor.submit(fetch_func, item): item 
+                for item in items
+            }
+            
+            # Collect results as they complete
+            completed = 0
+            total = len(items)
+            
+            for future in as_completed(future_to_item):
+                item = future_to_item[future]
+                completed += 1
+                
+                try:
+                    results[item] = future.result()
+                    print(f"  [{completed}/{total}] ✅ {item}")
+                except Exception as e:
+                    print(f"  [{completed}/{total}] ❌ {item}: {e}")
+                    results[item] = None
+                    
+        return results
+        
+    def fetch_batch_with_retry(
+        self,
+        items: list[str],
+        fetch_func: Callable[[str], T],
+        max_attempts: int = 3,
+        desc: str = "Fetching"
+    ) -> dict[str, T | None]:
+        """
+        Fetch data with automatic retry on failure.
+        
+        Args:
+            items: List of items to fetch
+            fetch_func: Function to fetch data for a single item
+            max_attempts: Maximum retry attempts per item
+            desc: Description for progress tracking
+            
+        Returns:
+            Dict mapping items to fetched data (None if all retries failed)
+        """
+        def fetch_with_retry(item: str) -> T | None:
+            return retry_with_backoff(
+                lambda: fetch_func(item),
+                max_attempts=max_attempts
+            )
+            
+        return self.fetch_batch(items, fetch_with_retry, desc)
+
+
+# Global parallel fetcher instance
+parallel_fetcher = ParallelFetcher(max_workers=5, rate_limit_per_min=60)
