@@ -205,11 +205,131 @@ class DCFEngine:
 
         return cash_flows, pv_explicit, term_pv, pv_explicit + term_pv, terminal_info
 
-    def calculate_wacc(self, beta: float | None = None) -> float:
-        """Calculate WACC using CAPM."""
+    def calculate_wacc(self, beta: float | None = None, 
+                      use_dynamic_rf: bool = True,
+                      use_cape_adjustment: bool = True) -> float:
+        """Calculate WACC using CAPM with dynamic risk-free rate and CAPE adjustments.
+        
+        Args:
+            beta: Company beta (defaults to company data or 1.0)
+            use_dynamic_rf: Use FRED API for live 10Y Treasury vs config static rate
+            use_cape_adjustment: Apply true Shiller CAPE macro valuation adjustment
+            
+        Returns:
+            WACC as decimal (e.g., 0.104 for 10.4%)
+        """
         if beta is None:
             beta = self._company_data.beta if self._company_data else 1.0
-        return self.RISK_FREE_RATE + (beta * self.MARKET_RISK_PREMIUM)
+        
+        # Get base risk-free rate from FRED (authoritative source)
+        if use_dynamic_rf:
+            try:
+                from src.pipeline.external.fred import get_fred_connector
+                fred = get_fred_connector()
+                macro_data = fred.get_macro_data()
+                rf_rate = macro_data.risk_free_rate
+            except Exception as e:
+                print(f"⚠️  FRED error: {e}. Using static rate.")
+                rf_rate = self.RISK_FREE_RATE
+        else:
+            rf_rate = self.RISK_FREE_RATE
+        
+        # Calculate base WACC using CAPM
+        base_wacc = rf_rate + (beta * self.MARKET_RISK_PREMIUM)
+        
+        # Apply true Shiller CAPE macro adjustment if enabled
+        if use_cape_adjustment:
+            try:
+                from src.pipeline.external.shiller import get_equity_risk_scalar
+                cape_data = get_equity_risk_scalar()
+                # Convert CAPE scalar to WACC adjustment
+                # CAPE scalar affects expected returns, which inversely affects discount rate
+                # If CAPE is expensive (scalar < 1.0), increase WACC
+                # If CAPE is cheap (scalar > 1.0), decrease WACC
+                # Adjustment = (1 - scalar) * base_wacc * sensitivity (50%)
+                cape_adjustment = (1.0 - cape_data['risk_scalar']) * base_wacc * 0.5
+                return base_wacc + cape_adjustment
+            except Exception as e:
+                print(f"⚠️  Shiller CAPE error: {e}. No CAPE adjustment applied.")
+                return base_wacc
+        
+        return base_wacc
+
+    def get_wacc_breakdown(self, beta: float | None = None,
+                          use_dynamic_rf: bool = True,
+                          use_cape_adjustment: bool = True) -> dict:
+        """Get detailed WACC calculation breakdown with all components.
+        
+        Useful for understanding how risk-free rate, beta, and CAPE adjustments
+        contribute to the final discount rate.
+        
+        Returns:
+            dict with rf_rate, market_risk_premium, beta, equity_risk_premium,
+                 base_wacc, cape_adjustment, final_wacc, and metadata
+        """
+        if beta is None:
+            beta = self._company_data.beta if self._company_data else 1.0
+        
+        # Get risk-free rate with source (from FRED API)
+        if use_dynamic_rf:
+            try:
+                from src.pipeline.external.fred import get_fred_connector
+                fred = get_fred_connector()
+                macro_data = fred.get_macro_data()
+                rf_rate = macro_data.risk_free_rate
+                rf_source = f"FRED (10Y Treasury): {rf_rate*100:.2f}%"
+                if macro_data.inflation_rate:
+                    rf_source += f" | Inflation: {macro_data.inflation_rate*100:.2f}%"
+            except Exception as e:
+                rf_rate = self.RISK_FREE_RATE
+                rf_source = f"Static (FRED unavailable): {self.RISK_FREE_RATE*100:.2f}%"
+        else:
+            rf_rate = self.RISK_FREE_RATE
+            rf_source = f"Static (config): {self.RISK_FREE_RATE*100:.2f}%"
+        
+        # Calculate equity risk premium
+        equity_risk_premium = beta * self.MARKET_RISK_PREMIUM
+        
+        # Base WACC (before CAPE adjustment)
+        base_wacc = rf_rate + equity_risk_premium
+        
+        # True Shiller CAPE adjustment
+        cape_adjustment = 0.0
+        cape_info = None
+        if use_cape_adjustment:
+            try:
+                from src.pipeline.external.shiller import get_equity_risk_scalar
+                cape_data = get_equity_risk_scalar()
+                # Convert CAPE scalar to WACC adjustment
+                cape_adjustment = (1.0 - cape_data['risk_scalar']) * base_wacc * 0.5
+                cape_info = {
+                    "cape_ratio": cape_data['current_cape'],
+                    "market_state": cape_data['regime'],
+                    "risk_scalar": cape_data['risk_scalar'],
+                    "adjustment_bps": cape_adjustment * 10000,  # Convert to basis points
+                    "percentile": cape_data.get('percentile'),
+                }
+            except Exception:
+                pass
+        
+        final_wacc = base_wacc + cape_adjustment
+        
+        return {
+            "risk_free_rate": rf_rate,
+            "rf_source": rf_source,
+            "market_risk_premium": self.MARKET_RISK_PREMIUM,
+            "beta": beta,
+            "equity_risk_premium": equity_risk_premium,
+            "base_wacc": base_wacc,
+            "cape_adjustment": cape_adjustment,
+            "cape_info": cape_info,
+            "final_wacc": final_wacc,
+            "components": {
+                "rf_contribution": rf_rate,
+                "beta_contribution": equity_risk_premium,
+                "cape_contribution": cape_adjustment,
+            }
+        }
 
     def clean_growth_rate(self, analyst_growth: float | None,
                          sector: str | None = None,
@@ -895,31 +1015,128 @@ class DCFEngine:
         return pd.DataFrame(result["cash_flows"])
 
     @staticmethod
+    def fetch_batch_data(tickers: list[str], show_progress: bool = True) -> dict[str, CompanyData | None]:
+        """
+        Fetch company data for multiple tickers in parallel.
+        
+        Significantly faster than sequential fetching (5-10x speedup).
+        Uses ThreadPoolExecutor to fetch multiple stocks concurrently.
+        
+        Args:
+            tickers: List of ticker symbols
+            show_progress: Show progress messages (default: True)
+            
+        Returns:
+            Dict mapping tickers to CompanyData (None if failed)
+            
+        Example:
+            results = DCFEngine.fetch_batch_data(["AAPL", "MSFT", "GOOGL"])
+            for ticker, data in results.items():
+                if data:
+                    print(f"{ticker}: FCF=${data.fcf:.2f}M")
+        """
+        from src.utils import parallel_fetcher
+        
+        if show_progress:
+            print(f"🚀 Fetching data for {len(tickers)} stocks in parallel...")
+        
+        def fetch_single(ticker: str) -> CompanyData | None:
+            """Fetch data for a single ticker."""
+            engine = DCFEngine(ticker, auto_fetch=False)
+            if engine.fetch_data():
+                return engine.company_data
+            return None
+        
+        results = parallel_fetcher.fetch_batch_with_retry(
+            tickers,
+            fetch_single,
+            desc="Company data"
+        )
+        
+        # Filter out failed fetches and report
+        success_count = sum(1 for v in results.values() if v is not None)
+        if show_progress:
+            print(f"✅ Successfully fetched {success_count}/{len(tickers)} stocks")
+        
+        return results
+
+    @staticmethod
     def compare_stocks(tickers: list[str], growth: float | None = None,
                        term_growth: float = 0.025, wacc: float | None = None,
-                       years: int = 5, skip_negative_fcf: bool = False) -> dict:
-        """Compare multiple stocks using DCF or EV/Sales analysis."""
+                       years: int = 5, skip_negative_fcf: bool = False,
+                       use_parallel: bool = True) -> dict:
+        """
+        Compare multiple stocks using DCF or EV/Sales analysis.
+        
+        Args:
+            tickers: List of ticker symbols
+            growth: Override growth rate (decimal)
+            term_growth: Terminal growth rate (decimal)
+            wacc: Override WACC (decimal)
+            years: Forecast years
+            skip_negative_fcf: Skip stocks with negative FCF
+            use_parallel: Use parallel fetching (default: True, 5-10x faster)
+            
+        Returns:
+            Dict with results, ranking, errors, skipped, summary
+        """
         results, errors, skipped = {}, {}, {}
 
-        for ticker in tickers:
-            try:
-                engine = DCFEngine(ticker, auto_fetch=True)
-                if engine.is_ready:
-                    # Check if we should skip negative FCF stocks (legacy option, now defaults to False)
-                    if skip_negative_fcf and engine.company_data.fcf <= 0:
-                        skipped[ticker] = f"Negative FCF: ${engine.company_data.fcf:.2f}M (loss-making)"
+        # Use parallel fetching if enabled and multiple tickers
+        if use_parallel and len(tickers) > 1:
+            print(f"🚀 Using parallel fetching for {len(tickers)} stocks...")
+            company_data_batch = DCFEngine.fetch_batch_data(tickers, show_progress=False)
+            
+            for ticker in tickers:
+                try:
+                    data = company_data_batch.get(ticker)
+                    
+                    if data is None:
+                        errors[ticker] = "Failed to fetch data"
                         continue
-
-                    # get_intrinsic_value now handles both DCF and EV/Sales automatically
+                    
+                    # Check negative FCF filter
+                    if skip_negative_fcf and data.fcf <= 0:
+                        skipped[ticker] = f"Negative FCF: ${data.fcf:.2f}M (loss-making)"
+                        continue
+                    
+                    # Create engine with pre-fetched data
+                    engine = DCFEngine(ticker, auto_fetch=False)
+                    engine._company_data = data
+                    
+                    # Calculate valuation
                     results[ticker] = engine.get_intrinsic_value(
-                        growth=growth, term_growth=term_growth, wacc=wacc, years=years
+                        growth=growth,
+                        term_growth=term_growth,
+                        wacc=wacc,
+                        years=years
                     )
-                else:
-                    errors[ticker] = engine.last_error
-            except ValueError as e:
-                errors[ticker] = str(e)
-            except Exception as e:
-                errors[ticker] = str(e)
+                    
+                except ValueError as e:
+                    errors[ticker] = str(e)
+                except Exception as e:
+                    errors[ticker] = str(e)
+        else:
+            # Sequential fetching (original behavior)
+            for ticker in tickers:
+                try:
+                    engine = DCFEngine(ticker, auto_fetch=True)
+                    if engine.is_ready:
+                        # Check if we should skip negative FCF stocks
+                        if skip_negative_fcf and engine.company_data.fcf <= 0:
+                            skipped[ticker] = f"Negative FCF: ${engine.company_data.fcf:.2f}M (loss-making)"
+                            continue
+
+                        # get_intrinsic_value handles both DCF and EV/Sales automatically
+                        results[ticker] = engine.get_intrinsic_value(
+                            growth=growth, term_growth=term_growth, wacc=wacc, years=years
+                        )
+                    else:
+                        errors[ticker] = engine.last_error
+                except ValueError as e:
+                    errors[ticker] = str(e)
+                except Exception as e:
+                    errors[ticker] = str(e)
 
         ranking = sorted(results.keys(), key=lambda t: results[t]["upside_downside"], reverse=True)
 

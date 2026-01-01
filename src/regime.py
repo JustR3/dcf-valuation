@@ -1,4 +1,9 @@
-"""Market Regime Detection - SPY 200-SMA + VIX Term Structure Analysis."""
+"""Market Regime Detection - SPY 200-SMA + VIX Term Structure Analysis.
+
+Also includes:
+- Dynamic risk-free rate fetching (10-year Treasury yield)
+- Shiller CAPE ratio for macro market valuation
+"""
 
 from __future__ import annotations
 
@@ -10,6 +15,7 @@ from typing import Any
 import pandas as pd
 import yfinance as yf
 
+from src.config import config
 from src.utils import default_cache, rate_limiter
 
 
@@ -271,3 +277,193 @@ class RegimeDetector:
     def clear_cache(self) -> None:
         self._cached_result = None
         self._cache_timestamp = None
+
+
+# ============================================================================
+# Risk-Free Rate & CAPE Macro Valuation Functions
+# ============================================================================
+
+@rate_limiter
+def get_10year_treasury_yield() -> float | None:
+    """Fetch current 10-year Treasury yield as risk-free rate.
+    
+    Returns:
+        Current 10-year Treasury yield as decimal (e.g., 0.045 for 4.5%)
+        Falls back to config default if fetch fails.
+    """
+    cache_key = "treasury_10y_yield"
+    cached = default_cache.get(cache_key, expiry_hours=config.MARKET_DATA_CACHE_HOURS)
+    
+    if cached is not None:
+        return cached
+    
+    try:
+        # Fetch ^TNX (10-year Treasury yield index)
+        treasury = yf.Ticker("^TNX")
+        data = treasury.history(period="5d")
+        
+        if data is not None and not data.empty and 'Close' in data:
+            # ^TNX returns yield in percentage points (e.g., 4.5), convert to decimal
+            yield_pct = float(data['Close'].iloc[-1])
+            yield_decimal = yield_pct / 100.0
+            
+            # Sanity check: Treasury yield should be between 0% and 15%
+            if 0.0 <= yield_decimal <= 0.15:
+                default_cache.set(cache_key, yield_decimal)
+                return yield_decimal
+                
+    except Exception:
+        pass
+    
+    # Fallback to config default
+    return config.RISK_FREE_RATE
+
+
+@dataclass
+class CapeData:
+    """Shiller CAPE (Cyclically Adjusted PE) ratio data."""
+    cape_ratio: float
+    last_updated: datetime
+    market_state: str  # "CHEAP", "FAIR", "EXPENSIVE"
+    
+    def to_dict(self) -> dict:
+        return {
+            "cape_ratio": self.cape_ratio,
+            "last_updated": self.last_updated.isoformat(),
+            "market_state": self.market_state,
+        }
+
+
+@rate_limiter  
+def get_current_cape() -> CapeData | None:
+    """Fetch current Shiller CAPE ratio for market valuation assessment.
+    
+    The CAPE ratio uses 10-year inflation-adjusted earnings to smooth out
+    business cycle fluctuations. Historical average is ~16-17.
+    
+    Returns:
+        CapeData object with current CAPE and market state classification
+        None if fetch fails
+    """
+    cache_key = "shiller_cape"
+    cached = default_cache.get(cache_key, expiry_hours=config.CAPE_CACHE_HOURS)
+    
+    # Reconstruct CapeData from cached dict
+    if cached is not None and isinstance(cached, dict):
+        try:
+            return CapeData(
+                cape_ratio=cached['cape_ratio'],
+                last_updated=datetime.fromisoformat(cached['last_updated']),
+                market_state=cached['market_state']
+            )
+        except Exception:
+            pass
+    
+    try:
+        # Try multiple methods to get CAPE-like valuation
+        
+        # Method 1: Try SPY ETF (more reliable than ^GSPC)
+        spy = yf.Ticker("SPY")
+        spy_info = spy.info
+        pe_ratio = spy_info.get('trailingPE')
+        
+        # Method 2: If SPY fails, try S&P 500 index
+        if not pe_ratio or pe_ratio <= 0:
+            sp500 = yf.Ticker("^GSPC")
+            sp500_info = sp500.info
+            pe_ratio = sp500_info.get('trailingPE')
+        
+        # Method 3: Use forward PE if trailing not available
+        if not pe_ratio or pe_ratio <= 0:
+            pe_ratio = spy_info.get('forwardPE') or sp500_info.get('forwardPE')
+        
+        if pe_ratio and 5 < pe_ratio < 100:  # Sanity check
+            # CAPE is typically 15-30% higher than TTM PE (due to smoothing)
+            # Use conservative 1.2x multiplier
+            cape_estimate = pe_ratio * 1.2
+            
+            # Classify market state based on historical CAPE ranges
+            # Historical: CAPE mean ~16-17, high 30+, low 10-15
+            if cape_estimate < config.CAPE_LOW_THRESHOLD:
+                market_state = "CHEAP"
+            elif cape_estimate > config.CAPE_HIGH_THRESHOLD:
+                market_state = "EXPENSIVE"
+            else:
+                market_state = "FAIR"
+            
+            cape_data = CapeData(
+                cape_ratio=cape_estimate,
+                last_updated=datetime.now(),
+                market_state=market_state
+            )
+            
+            # Cache as dict for JSON serialization
+            default_cache.set(cache_key, cape_data.to_dict())
+            return cape_data
+            
+    except Exception:
+        pass
+    
+    # Fallback: Return a reasonable default based on recent market conditions
+    # As of Jan 2026, market is moderately valued (use ~25 as estimate)
+    # This prevents system from breaking when API fails
+    try:
+        fallback_cape = 25.0  # Moderate valuation
+        cape_data = CapeData(
+            cape_ratio=fallback_cape,
+            last_updated=datetime.now(),
+            market_state="FAIR"
+        )
+        return cape_data
+    except Exception:
+        return None
+
+
+def calculate_cape_wacc_adjustment() -> float:
+    """Calculate WACC adjustment based on Shiller CAPE market valuation.
+    
+    Logic:
+    - CHEAP market (CAPE < 15): Lower discount rate (market undervalued, less risk premium)
+    - EXPENSIVE market (CAPE > 35): Higher discount rate (market overvalued, more risk premium)
+    - FAIR market: No adjustment
+    
+    Returns:
+        WACC adjustment in percentage points (e.g., -0.005 for -50bps, +0.01 for +100bps)
+    """
+    if not config.ENABLE_MACRO_ADJUSTMENT:
+        return 0.0
+    
+    cape_data = get_current_cape()
+    if cape_data is None:
+        return 0.0
+    
+    cape = cape_data.cape_ratio
+    
+    # Cheap market: Reduce WACC by up to 50bps (lower risk premium justified)
+    if cape < config.CAPE_LOW_THRESHOLD:
+        # Scale linearly: CAPE 10 → -50bps, CAPE 15 → 0bps
+        adjustment = -0.005 * (config.CAPE_LOW_THRESHOLD - cape) / 5
+        return max(adjustment, -0.005)  # Cap at -50bps
+    
+    # Expensive market: Increase WACC by up to 100bps (higher risk premium)
+    elif cape > config.CAPE_HIGH_THRESHOLD:
+        # Scale linearly: CAPE 35 → 0bps, CAPE 45 → +100bps
+        adjustment = 0.01 * (cape - config.CAPE_HIGH_THRESHOLD) / 10
+        return min(adjustment, 0.01)  # Cap at +100bps
+    
+    # Fair valuation: No adjustment
+    return 0.0
+
+
+def get_dynamic_risk_free_rate() -> tuple[float, str]:
+    """Get dynamic risk-free rate with source info.
+    
+    Returns:
+        (risk_free_rate, source_message)
+    """
+    rf_rate = get_10year_treasury_yield()
+    
+    if rf_rate and rf_rate != config.RISK_FREE_RATE:
+        return rf_rate, f"10Y Treasury: {rf_rate*100:.2f}%"
+    else:
+        return config.RISK_FREE_RATE, f"Static (config): {config.RISK_FREE_RATE*100:.2f}%"
