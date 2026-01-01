@@ -1,0 +1,42 @@
+[project]
+name = "dcf-valuation"
+version = "1.0.0"
+description = "Professional DCF (Discounted Cash Flow) valuation toolkit with Monte Carlo simulation, portfolio optimization, and market regime analysis"
+authors = [{ name = "JustR3", email = "whispersdi3@gmail.com" }]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "yfinance>=0.2.50",
+    "pandas>=2.2.0",
+    "numpy>=2.0.0",
+    "scipy>=1.14.0",
+    "questionary>=2.0.0",
+    "rich>=13.0.0",
+    "requests>=2.32.0",
+    "pyarrow>=18.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
