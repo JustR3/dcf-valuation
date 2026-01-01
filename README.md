@@ -33,34 +33,51 @@ This toolkit implements sophisticated DCF valuation with Monte Carlo simulation,
 
 ### Installation
 
+This project uses [UV](https://docs.astral.sh/uv/) for fast, reliable Python package management.
+
 ```bash
 # Clone the repository
 git clone https://github.com/JustR3/dcf-valuation.git
 cd dcf-valuation
 
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+# Install UV if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install dependencies
-pip install -r requirements.txt
+# Sync dependencies (creates .venv automatically)
+uv sync
 ```
 
 ### Usage
 
 **Single Stock Valuation:**
 ```bash
-python dcf.py valuation AAPL
+uv run python dcf.py valuation AAPL
 ```
 
 **Multi-Stock Comparison:**
 ```bash
-python dcf.py compare AAPL MSFT GOOGL AMZN
+uv run python dcf.py compare AAPL MSFT GOOGL AMZN
 ```
 
 **Portfolio Optimization:**
 ```bash
-python dcf.py portfolio AAPL MSFT GOOGL --method max_sharpe
+uv run python dcf.py portfolio AAPL MSFT GOOGL --method max_sharpe
+```
+
+### Development
+
+```bash
+# Install with dev dependencies
+uv sync --all-extras
+
+# Run tests
+uv run pytest tests/ -v
+
+# Run linter
+uv run ruff check src/
+
+# Format code
+uv run ruff format src/
 ```
 
 ## 📦 Project Structure
