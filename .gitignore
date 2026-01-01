@@ -51,3 +51,6 @@ htmlcov/
 
 # Distribution
 *.whl
+
+# Environment secrets
+config/secrets.env
