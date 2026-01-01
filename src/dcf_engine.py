@@ -132,13 +132,32 @@ class DCFEngine:
             revenue = info.get("totalRevenue", 0) / 1e6 if info.get("totalRevenue") else None
             sector = info.get("sector")
 
+            # Get beta with Damodaran fallback
+            beta = info.get("beta", None)
+            if beta is None or beta <= 0:
+                # Try Damodaran sector beta as fallback
+                try:
+                    from src.pipeline.external.damodaran import get_damodaran_loader
+                    loader = get_damodaran_loader()
+                    if sector:
+                        priors = loader.get_sector_priors(sector)
+                        if priors.beta and priors.beta > 0:
+                            beta = priors.beta
+                            print(f"ℹ️  Using Damodaran sector beta for {sector}: {beta:.2f}")
+                except Exception as e:
+                    print(f"⚠️  Damodaran beta fetch failed: {e}")
+                
+                # Final fallback to 1.0
+                if beta is None or beta <= 0:
+                    beta = 1.0
+
             self._company_data = CompanyData(
                 ticker=self.ticker,
                 fcf=fcf_annual,
                 shares=shares,
                 current_price=info.get("currentPrice", 0),
                 market_cap=info.get("marketCap", 0) / 1e9,
-                beta=info.get("beta", 1.0) or 1.0,
+                beta=beta,
                 analyst_growth=analyst_growth,
                 revenue=revenue,
                 sector=sector,
@@ -348,8 +367,22 @@ class DCFEngine:
         if blend_weight is None:
             blend_weight = config.BAYESIAN_ANALYST_WEIGHT
 
-        # Get sector prior
-        sector_prior = self.SECTOR_GROWTH_PRIORS.get(sector, 0.08)  # Default 8%
+        # Get sector prior from Damodaran (with fallback to static config)
+        sector_prior = None
+        if sector:
+            try:
+                from src.pipeline.external.damodaran import get_damodaran_loader
+                loader = get_damodaran_loader()
+                priors = loader.get_sector_priors(sector)
+                if priors.revenue_growth and priors.revenue_growth > 0:
+                    sector_prior = priors.revenue_growth
+                    # Silently use Damodaran data (don't spam logs)
+            except Exception:
+                pass  # Fall back to config
+        
+        # Fallback to static config if Damodaran unavailable
+        if sector_prior is None:
+            sector_prior = self.SECTOR_GROWTH_PRIORS.get(sector, 0.08)  # Default 8%
 
         # Case 1: No analyst data
         if analyst_growth is None:
