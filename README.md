@@ -89,21 +89,47 @@ uv run ruff format src/
 
 ```
 dcf-valuation/
-├── dcf.py                 # Main CLI entry point
+├── dcf.py                     # Lightweight CLI entry point
 ├── src/
-│   ├── dcf_engine.py      # Core DCF valuation engine
-│   ├── portfolio.py       # DCF-aware portfolio optimizer
-│   ├── optimizer.py       # Black-Litterman implementation
-│   ├── regime.py          # Market regime detection
-│   ├── utils.py           # Caching & rate limiting
-│   └── config.py          # Configuration constants
-├── data/
-│   └── cache/             # Cached financial data
-├── tests/                 # Unit tests
+│   ├── __init__.py            # Package exports
+│   ├── config.py              # Configuration constants
+│   ├── dcf_engine.py          # Core DCF valuation engine
+│   ├── portfolio.py           # DCF-aware portfolio optimizer
+│   ├── optimizer.py           # Black-Litterman implementation
+│   ├── regime.py              # Market regime detection + CAPE analysis
+│   ├── utils.py               # Caching & rate limiting
+│   ├── exceptions.py          # Custom exception hierarchy
+│   ├── validation.py          # Pydantic input validation models
+│   ├── data_validator.py      # yfinance data validation layer
+│   ├── logging_config.py      # Structured logging framework
+│   ├── cli/                   # CLI module (Rich + Questionary)
+│   │   ├── __init__.py
+│   │   ├── commands.py        # Command handlers (valuation, compare, portfolio)
+│   │   ├── display.py         # Rich formatting utilities
+│   │   └── interactive.py     # Interactive mode prompts
+│   └── external/              # External data integrations
+│       ├── __init__.py
+│       ├── damodaran.py       # NYU Damodaran industry data
+│       ├── fred.py            # FRED macro indicators
+│       └── shiller.py         # Yale Shiller CAPE ratios
+├── data/cache/                # Cached financial data (JSON/Parquet)
+├── tests/                     # Comprehensive test suite (58+ tests)
+│   ├── test_basic.py          # Core engine tests
+│   ├── test_validation.py     # Validation & exception tests
+│   └── ...
+├── docs/                      # Integration documentation
 ├── README.md
 ├── LICENSE
 └── pyproject.toml
 ```
+
+### Architecture Highlights
+
+- **Modular CLI**: Separated from business logic for testability
+- **Custom Exceptions**: `DCFError` hierarchy with `to_dict()` serialization
+- **Pydantic Validation**: Type-safe input validation for all parameters
+- **Structured Logging**: Colored console output, JSON format option, performance decorators
+- **Data Validation**: yfinance response sanitization with automatic fallbacks
 
 ## 🔬 Methodology
 
@@ -136,8 +162,23 @@ Provides probabilistic range: 10th/90th percentiles, mean, median, std dev.
 ## 🧪 Testing
 
 ```bash
-pytest tests/
+# Run all tests
+uv run pytest tests/ -v
+
+# Run with coverage report
+uv run pytest tests/ --cov=src --cov-report=term-missing
+
+# Run specific test module
+uv run pytest tests/test_validation.py -v
 ```
+
+### Test Coverage
+
+| Module | Description | Tests |
+|--------|-------------|-------|
+| `test_basic.py` | Core engine, config, caching | 19 |
+| `test_validation.py` | Exceptions, Pydantic models, data validation | 39 |
+| `test_external_integrations.py` | FRED, Shiller, Damodaran | 5+ |
 
 ## 📊 Example Output
 
