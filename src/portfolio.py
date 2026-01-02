@@ -62,7 +62,18 @@ class DCFPortfolioOptimizer(PortfolioEngine):
                 if dcf.get('value_per_share', 0) <= 0:
                     continue
 
-                upside = dcf['upside_downside'] / 100.0
+                # CRITICAL FIX: Annualize multi-year DCF upside to get expected annual return
+                # DCF upside is typically 5-year target, not 1-year return
+                # Example: +100% over 5 years = (1+1.0)^(1/5) - 1 = 14.87% annualized
+                total_upside = dcf['upside_downside'] / 100.0
+                dcf_years = dcf.get('inputs', {}).get('years', 5)  # Default 5-year DCF
+                
+                # Annualize: (1 + total_return)^(1/years) - 1
+                if total_upside > -0.99:  # Prevent math domain error
+                    annual_return = (1 + total_upside) ** (1 / dcf_years) - 1
+                else:
+                    annual_return = total_upside / dcf_years  # Fallback for extreme negatives
+                
                 conviction_data = dcf.get('conviction', {})
                 conviction = conviction_data.get('label', 'N/A')
                 mc_data = dcf.get('monte_carlo', {})
@@ -70,17 +81,17 @@ class DCFPortfolioOptimizer(PortfolioEngine):
 
                 # Conviction-based filtering and discounting
                 if conviction == 'HIGH CONVICTION':
-                    viewdict[ticker] = upside
+                    viewdict[ticker] = annual_return
                     view_confidences.append(0.3 + (mc_probability / 100) * 0.3)
                     viable_tickers.append(ticker)
 
                 elif conviction == 'MODERATE':
-                    viewdict[ticker] = upside
+                    viewdict[ticker] = annual_return
                     view_confidences.append(0.2 + (mc_probability / 100) * 0.2)
                     viable_tickers.append(ticker)
 
                 elif conviction == 'SPECULATIVE':
-                    viewdict[ticker] = upside * 0.5
+                    viewdict[ticker] = annual_return * 0.5
                     view_confidences.append(0.1 + (mc_probability / 100) * 0.1)
                     viable_tickers.append(ticker)
 
