@@ -1,5 +1,8 @@
 """DCF Valuation Toolkit - Core modules."""
 
+# Load environment variables first (must be before other imports)
+from . import env_loader  # noqa: F401
+
 from .config import config
 from .dcf_engine import CompanyData, DCFEngine
 from .exceptions import (

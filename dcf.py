@@ -28,6 +28,9 @@ from __future__ import annotations
 import argparse
 import sys
 
+# Load environment variables FIRST before any other imports
+import src.env_loader  # noqa: F401
+
 # Check for Rich/Questionary availability
 try:
     import questionary
