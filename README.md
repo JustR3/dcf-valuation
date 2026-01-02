@@ -144,7 +144,7 @@ dcf-valuation/
 
 ### Monte Carlo Simulation
 
-Simulates 3,000+ scenarios varying:
+Simulates 5,000+ scenarios varying:
 - Growth rates (±20% volatility)
 - WACC (±10% volatility)
 - Terminal growth (±5% volatility)
