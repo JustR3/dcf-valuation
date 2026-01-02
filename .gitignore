@@ -38,8 +38,7 @@ env/
 Thumbs.db
 
 # Data and cache
-data/cache/*.json
-data/cache/*.parquet
+data/cache/
 *.csv
 *.xlsx
 benchmark_run.log
@@ -48,6 +47,10 @@ benchmark_run.log
 .pytest_cache/
 .coverage
 htmlcov/
+.ruff_cache/
+
+# Logs
+*.log
 
 # Distribution
 *.whl
