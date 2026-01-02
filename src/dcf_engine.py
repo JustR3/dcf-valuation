@@ -126,11 +126,31 @@ class DCFEngine:
                 self._last_error = f"No shares data for {self.ticker}"
                 return False
 
-            analyst_growth = info.get("earningsGrowth") or info.get("revenueGrowth")
+            # Extract growth rate with improved priority:
+            # 1. Forward EPS growth (analyst expectations, cleaner)
+            # 2. Revenue growth (more stable)
+            # 3. Earnings growth (backward-looking, includes one-time items)
+            analyst_growth = None
+            
+            # Try forward EPS growth first (most reliable for forward DCF)
+            trailing_eps = info.get("trailingEps")
+            forward_eps = info.get("forwardEps")
+            if trailing_eps and forward_eps and trailing_eps > 0:
+                analyst_growth = (forward_eps - trailing_eps) / trailing_eps
+            
+            # Fallback to revenue growth (more stable than earnings)
+            if analyst_growth is None:
+                analyst_growth = info.get("revenueGrowth")
+            
+            # Last resort: backward earnings growth (problematic due to one-time items)
+            if analyst_growth is None:
+                analyst_growth = info.get("earningsGrowth")
+            
+            # Normalize if provided as percentage
             if analyst_growth and abs(analyst_growth) > 1:
                 analyst_growth /= 100
-            if analyst_growth and abs(analyst_growth) > 0.50:
-                analyst_growth = 0.50 if analyst_growth > 0 else -0.50
+            
+            # Remove hard cap - will be handled by clean_growth_rate() with Damodaran priors
 
             # Get revenue and sector for EV/Sales valuation
             revenue = info.get("totalRevenue", 0) / 1e6 if info.get("totalRevenue") else None
@@ -403,7 +423,7 @@ class DCFEngine:
         """Clean analyst growth rate using Bayesian prior blending.
 
         Args:
-            analyst_growth: Raw growth rate from yfinance
+            analyst_growth: Raw growth rate from yfinance (preferably forward EPS growth)
             sector: Company sector for prior selection
             blend_weight: Weight for analyst data (default from config: 70% analyst, 30% prior)
 
@@ -416,6 +436,7 @@ class DCFEngine:
 
         # Get sector prior from Damodaran (with fallback to static config)
         sector_prior = None
+        damodaran_source = False
         if sector:
             try:
                 from src.external.damodaran import get_damodaran_loader
@@ -423,7 +444,7 @@ class DCFEngine:
                 priors = loader.get_sector_priors(sector)
                 if priors.revenue_growth and priors.revenue_growth > 0:
                     sector_prior = priors.revenue_growth
-                    # Silently use Damodaran data (don't spam logs)
+                    damodaran_source = True
             except Exception:
                 pass  # Fall back to config
         
@@ -431,26 +452,52 @@ class DCFEngine:
         if sector_prior is None:
             sector_prior = self.SECTOR_GROWTH_PRIORS.get(sector, 0.08)  # Default 8%
 
+        # Define sector-specific caps (more realistic than blanket 50%)
+        sector_caps = {
+            "Healthcare": 0.20,           # Pharma/Healthcare: mature, regulated
+            "Consumer Defensive": 0.15,   # Staples: very stable
+            "Utilities": 0.10,            # Utilities: slow growth
+            "Financial Services": 0.15,   # Banks: mature
+            "Industrials": 0.20,          # Industrial: moderate
+            "Real Estate": 0.15,          # REITs: stable income
+            "Energy": 0.20,               # Energy: cyclical
+            "Basic Materials": 0.20,      # Materials: cyclical
+            "Consumer Cyclical": 0.25,    # Retail/cyclical: moderate-high
+            "Communication Services": 0.30,  # Media/telecom: moderate-high
+            "Technology": 0.40,           # Tech: high growth
+        }
+        sector_cap = sector_caps.get(sector, 0.30)  # Default 30% cap
+
         # Case 1: No analyst data
         if analyst_growth is None:
-            return sector_prior, f"⚠️  No analyst data. Using sector prior ({sector_prior*100:.1f}%)"
+            source_msg = "Damodaran" if damodaran_source else "config"
+            return sector_prior, f"⚠️  No analyst data. Using {source_msg} sector prior ({sector_prior*100:.1f}%)"
 
-        # Case 2: Extreme outlier (data error)
+        # Case 2: Extreme outlier (data error) - use prior
         if analyst_growth < self.MIN_GROWTH_THRESHOLD or analyst_growth > self.MAX_GROWTH_THRESHOLD:
             return sector_prior, (
-                f"⚠️  Analyst data ({analyst_growth*100:.1f}%) rejected (outlier). "
+                f"⚠️  Analyst data ({analyst_growth*100:.1f}%) rejected (extreme outlier). "
                 f"Using sector prior ({sector_prior*100:.1f}%)"
             )
 
-        # Case 3: Valid but extreme - Bayesian blend
-        if analyst_growth < -0.20 or analyst_growth > 0.50:
+        # Case 3: Exceeds sector-specific cap - blend heavily toward prior
+        if analyst_growth > sector_cap:
+            # Use aggressive blending: 40% analyst, 60% prior
+            blended = (0.4 * analyst_growth) + (0.6 * sector_prior)
+            return blended, (
+                f"ℹ️  Analyst data ({analyst_growth*100:.1f}%) exceeds {sector} cap ({sector_cap*100:.0f}%). "
+                f"Blended to {blended*100:.1f}%"
+            )
+
+        # Case 4: Valid but aggressive - standard Bayesian blend
+        if analyst_growth > sector_prior * 2.0:  # More than 2x sector average
             blended = (blend_weight * analyst_growth) + ((1 - blend_weight) * sector_prior)
             return blended, (
-                f"ℹ️  Analyst data ({analyst_growth*100:.1f}%) blended with sector prior. "
+                f"ℹ️  Analyst data ({analyst_growth*100:.1f}%) blended with sector prior ({sector_prior*100:.1f}%). "
                 f"Using {blended*100:.1f}%"
             )
 
-        # Case 4: Reasonable data - use as is
+        # Case 5: Reasonable data - use as is
         return analyst_growth, f"✓ Using analyst growth rate ({analyst_growth*100:.1f}%)"
 
     def get_sector_average_ev_sales(self, sector: str, max_peers: int = 10) -> float | None:
@@ -474,10 +521,16 @@ class DCFEngine:
                 # Internet/Social Media
                 'Internet Content & Information': ['GOOGL', 'META', 'NFLX', 'DIS'],
 
+                # Healthcare - Industry-specific (CRITICAL: Don't mix pharma with insurance!)
+                'Healthcare Plans': ['UNH', 'CVS', 'CI', 'ELV', 'HUM', 'CNC'],  # Insurance/Managed care
+                'Drug Manufacturers - General': ['JNJ', 'PFE', 'ABBV', 'LLY', 'MRK'],  # Big pharma
+                'Biotechnology': ['AMGN', 'GILD', 'REGN', 'VRTX', 'BIIB'],  # Biotech
+                'Medical Devices': ['ABT', 'TMO', 'DHR', 'SYK', 'BSX'],  # Med devices
+
                 # Sector-level fallbacks
                 'Consumer Cyclical': ['AMZN', 'HD', 'NKE', 'MCD', 'SBUX', 'TSLA', 'F', 'GM'],
                 'Technology': ['AAPL', 'MSFT', 'GOOGL', 'META', 'NVDA'],
-                'Healthcare': ['UNH', 'JNJ', 'PFE', 'ABBV', 'LLY'],
+                'Healthcare': ['UNH', 'JNJ', 'PFE', 'ABBV', 'LLY'],  # Mixed fallback
                 'Financial Services': ['JPM', 'BAC', 'WFC', 'C', 'GS'],
                 'Communication Services': ['GOOGL', 'META', 'DIS', 'NFLX', 'T'],
             }
@@ -808,14 +861,14 @@ class DCFEngine:
                       exit_multiple: float | None = None) -> dict:
         """Monte Carlo simulation for probabilistic valuation.
 
-        Simulates multiple DCF scenarios with stochastic inputs to generate
-        a distribution of possible values. Useful for risk assessment.
+        Simulates multiple scenarios with stochastic inputs to generate
+        a distribution of possible values. Works for both DCF and EV/Sales valuations.
 
         Args:
             iterations: Number of Monte Carlo runs (default 5000, max 10000 for high-precision)
-            growth, wacc, term_growth, years: Base case parameters
-            terminal_method: Terminal value method
-            exit_multiple: Exit multiple for terminal value
+            growth, wacc, term_growth, years: Base case parameters (DCF only)
+            terminal_method: Terminal value method (DCF only)
+            exit_multiple: Exit multiple for terminal value (DCF only)
 
         Returns:
             dict with median, VaR, upside, probability metrics
@@ -825,9 +878,9 @@ class DCFEngine:
 
         data = self._company_data
 
-        # Can only simulate for positive FCF companies
+        # Route to appropriate Monte Carlo method
         if data.fcf <= 0:
-            return {"error": "Monte Carlo requires positive FCF"}
+            return self._simulate_ev_sales_value(iterations)
 
         # Set base parameters
         if growth is None:
@@ -918,6 +971,92 @@ class DCFEngine:
                 "terminal_method": terminal_method,
             },
             "distribution": values.tolist() if iterations <= 1000 else None,  # Only save for small runs
+        }
+
+    def _simulate_ev_sales_value(self, iterations: int = 5000) -> dict:
+        """Monte Carlo simulation for EV/Sales valuations (negative FCF companies).
+        
+        Simulates valuation uncertainty by varying the EV/Sales multiple around
+        sector averages with realistic bounds.
+        
+        Args:
+            iterations: Number of Monte Carlo runs
+            
+        Returns:
+            dict with median, VaR, upside, probability metrics
+        """
+        data = self._company_data
+        
+        # Get base EV/Sales multiple
+        base_ev_sales = self.get_sector_average_ev_sales(data.sector)
+        if not base_ev_sales or base_ev_sales <= 0:
+            return {"error": "Cannot determine sector EV/Sales multiple"}
+        
+        # Run Monte Carlo simulations
+        values = []
+        
+        for _ in range(iterations):
+            # Stochastic EV/Sales multiple: ±30% of base (realistic range for sector variation)
+            sim_ev_sales = np.random.uniform(low=base_ev_sales*0.7, high=base_ev_sales*1.3)
+            
+            # Stochastic revenue: ±10% variation (near-term revenue is more certain than long-term FCF)
+            sim_revenue = np.random.normal(loc=data.revenue, scale=data.revenue*0.10)
+            sim_revenue = max(sim_revenue, 0)  # Prevent negative revenue
+            
+            # Calculate value
+            implied_ev = sim_revenue * sim_ev_sales
+            value_per_share = implied_ev / data.shares if data.shares > 0 else 0
+            
+            if value_per_share > 0:
+                values.append(value_per_share)
+        
+        if not values:
+            return {"error": "All Monte Carlo iterations failed"}
+        
+        # Calculate statistics
+        values = np.array(values)
+        median_value = np.median(values)
+        mean_value = np.mean(values)
+        std_value = np.std(values)
+        
+        # Risk metrics
+        var_95 = np.percentile(values, 5)   # Value at Risk (5th percentile)
+        upside_95 = np.percentile(values, 95)  # 95th percentile (upside)
+        
+        # Probability metrics
+        prob_undervalued = (values > data.current_price).mean() * 100
+        prob_overvalued = (values < data.current_price).mean() * 100
+        
+        # Assessment
+        if prob_undervalued > 75:
+            assessment = "HIGH CONVICTION BUY (>75% probability undervalued)"
+        elif prob_undervalued > 60:
+            assessment = "MODERATE BUY (60-75% probability undervalued)"
+        elif prob_undervalued > 40:
+            assessment = "NEUTRAL (40-60% mixed signals)"
+        elif prob_undervalued > 25:
+            assessment = "MODERATE SELL (25-40% probability undervalued)"
+        else:
+            assessment = "HIGH CONVICTION SELL (<25% probability undervalued)"
+        
+        return {
+            "ticker": self.ticker,
+            "iterations": len(values),
+            "valuation_method": "EV/Sales Monte Carlo",
+            "current_price": data.current_price,
+            "median_value": median_value,
+            "mean_value": mean_value,
+            "std_value": std_value,
+            "var_95": var_95,  # Downside risk
+            "upside_95": upside_95,  # Upside potential
+            "prob_undervalued": prob_undervalued,
+            "prob_overvalued": prob_overvalued,
+            "assessment": assessment,
+            "base_params": {
+                "base_ev_sales_multiple": base_ev_sales,
+                "revenue": data.revenue,
+                "sector": data.sector,
+            },
         }
 
     def run_scenario_analysis(self, base_growth: float | None = None,
