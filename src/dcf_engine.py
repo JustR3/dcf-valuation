@@ -10,7 +10,11 @@ import pandas as pd
 import yfinance as yf
 
 from src.config import config
+from src.exceptions import CalculationError, DataFetchError, InsufficientDataError, ValidationError
+from src.logging_config import get_logger
 from src.utils import default_cache, rate_limiter
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -137,7 +141,7 @@ class DCFEngine:
             if beta is None or beta <= 0:
                 # Try Damodaran sector beta as fallback
                 try:
-                    from src.pipeline.external.damodaran import get_damodaran_loader
+                    from src.external.damodaran import get_damodaran_loader
                     loader = get_damodaran_loader()
                     if sector:
                         priors = loader.get_sector_priors(sector)
@@ -174,16 +178,54 @@ class DCFEngine:
         """Calculate DCF metrics with flexible terminal value methods.
 
         Args:
+            fcf0: Base free cash flow (millions)
+            growth: Annual growth rate (decimal, e.g., 0.10 for 10%)
+            term_growth: Terminal growth rate (decimal)
+            wacc: Weighted average cost of capital (decimal)
+            years: Number of explicit forecast years
             terminal_method: 'gordon_growth' (perpetuity) or 'exit_multiple' (EV/FCF multiple)
             exit_multiple: Custom exit multiple (if None, uses sector default)
 
         Returns:
             (cash_flows, pv_explicit, term_pv, enterprise_value, terminal_info)
+            
+        Raises:
+            CalculationError: If inputs are invalid or calculation fails
         """
+        ticker = self.ticker if hasattr(self, 'ticker') else "UNKNOWN"
+        
         # Validate FCF is positive - DCF doesn't work with negative cash flows
         if fcf0 <= 0:
-            raise ValueError(f"Cannot perform DCF with non-positive FCF: ${fcf0:.2f}M. "
-                           "DCF requires positive free cash flows.")
+            raise CalculationError(
+                f"Cannot perform DCF with non-positive FCF: ${fcf0:.2f}M. "
+                "Use EV/Sales valuation for pre-profit companies.",
+                ticker=ticker,
+                details={"fcf": fcf0, "suggestion": "Use calculate_ev_sales_valuation()"}
+            )
+        
+        # Validate growth rate
+        if growth < -0.50 or growth > 1.0:
+            raise ValidationError(
+                f"Growth rate {growth:.1%} outside valid range (-50% to 100%)",
+                ticker=ticker,
+                details={"growth": growth, "min": -0.50, "max": 1.0}
+            )
+        
+        # Validate WACC
+        if wacc <= 0 or wacc > 0.50:
+            raise ValidationError(
+                f"WACC {wacc:.1%} outside valid range (0% to 50%)",
+                ticker=ticker,
+                details={"wacc": wacc, "min": 0.001, "max": 0.50}
+            )
+        
+        # Validate years
+        if years < 1 or years > 20:
+            raise ValidationError(
+                f"Forecast years {years} outside valid range (1 to 20)",
+                ticker=ticker,
+                details={"years": years, "min": 1, "max": 20}
+            )
 
         pv_explicit, fcf = 0.0, fcf0
         cash_flows = []
@@ -211,7 +253,12 @@ class DCFEngine:
             # Gordon Growth Method: Terminal Value = FCF × (1 + g) / (WACC - g)
             # Assumes perpetual stable growth - better for mature companies
             if wacc <= term_growth:
-                raise ValueError(f"WACC ({wacc:.1%}) must be > terminal growth ({term_growth:.1%})")
+                raise CalculationError(
+                    f"WACC ({wacc:.1%}) must be greater than terminal growth ({term_growth:.1%}) "
+                    "for Gordon Growth method. Consider using exit_multiple method.",
+                    ticker=ticker,
+                    details={"wacc": wacc, "term_growth": term_growth, "suggestion": "exit_multiple"}
+                )
 
             term_value = fcf * (1 + term_growth) / (wacc - term_growth)
             terminal_info["perpetuity_growth"] = term_growth
@@ -243,7 +290,7 @@ class DCFEngine:
         # Get base risk-free rate from FRED (authoritative source)
         if use_dynamic_rf:
             try:
-                from src.pipeline.external.fred import get_fred_connector
+                from src.external.fred import get_fred_connector
                 fred = get_fred_connector()
                 macro_data = fred.get_macro_data()
                 rf_rate = macro_data.risk_free_rate
@@ -259,7 +306,7 @@ class DCFEngine:
         # Apply true Shiller CAPE macro adjustment if enabled
         if use_cape_adjustment:
             try:
-                from src.pipeline.external.shiller import get_equity_risk_scalar
+                from src.external.shiller import get_equity_risk_scalar
                 cape_data = get_equity_risk_scalar()
                 # Convert CAPE scalar to WACC adjustment
                 # CAPE scalar affects expected returns, which inversely affects discount rate
@@ -292,7 +339,7 @@ class DCFEngine:
         # Get risk-free rate with source (from FRED API)
         if use_dynamic_rf:
             try:
-                from src.pipeline.external.fred import get_fred_connector
+                from src.external.fred import get_fred_connector
                 fred = get_fred_connector()
                 macro_data = fred.get_macro_data()
                 rf_rate = macro_data.risk_free_rate
@@ -317,7 +364,7 @@ class DCFEngine:
         cape_info = None
         if use_cape_adjustment:
             try:
-                from src.pipeline.external.shiller import get_equity_risk_scalar
+                from src.external.shiller import get_equity_risk_scalar
                 cape_data = get_equity_risk_scalar()
                 # Convert CAPE scalar to WACC adjustment
                 cape_adjustment = (1.0 - cape_data['risk_scalar']) * base_wacc * 0.5
@@ -371,7 +418,7 @@ class DCFEngine:
         sector_prior = None
         if sector:
             try:
-                from src.pipeline.external.damodaran import get_damodaran_loader
+                from src.external.damodaran import get_damodaran_loader
                 loader = get_damodaran_loader()
                 priors = loader.get_sector_priors(sector)
                 if priors.revenue_growth and priors.revenue_growth > 0:

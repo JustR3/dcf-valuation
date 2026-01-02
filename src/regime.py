@@ -287,9 +287,14 @@ class RegimeDetector:
 def get_10year_treasury_yield() -> float | None:
     """Fetch current 10-year Treasury yield as risk-free rate.
     
+    Data source priority:
+    1. FRED API (authoritative, requires API key)
+    2. yfinance ^TNX (fallback)
+    3. Config default (last resort)
+    
     Returns:
         Current 10-year Treasury yield as decimal (e.g., 0.045 for 4.5%)
-        Falls back to config default if fetch fails.
+        Falls back to config default if all sources fail.
     """
     cache_key = "treasury_10y_yield"
     cached = default_cache.get(cache_key, expiry_hours=config.MARKET_DATA_CACHE_HOURS)
@@ -297,8 +302,22 @@ def get_10year_treasury_yield() -> float | None:
     if cached is not None:
         return cached
     
+    # Priority 1: Try FRED API (authoritative source)
     try:
-        # Fetch ^TNX (10-year Treasury yield index)
+        from src.external.fred import get_fred_connector
+        fred = get_fred_connector()
+        if fred.fred is not None:  # FRED API available
+            macro_data = fred.get_macro_data()
+            if macro_data and macro_data.risk_free_rate:
+                rf_rate = macro_data.risk_free_rate
+                if 0.0 <= rf_rate <= 0.15:  # Sanity check
+                    default_cache.set(cache_key, rf_rate)
+                    return rf_rate
+    except Exception:
+        pass
+    
+    # Priority 2: Fallback to yfinance ^TNX
+    try:
         treasury = yf.Ticker("^TNX")
         data = treasury.history(period="5d")
         
@@ -315,7 +334,7 @@ def get_10year_treasury_yield() -> float | None:
     except Exception:
         pass
     
-    # Fallback to config default
+    # Priority 3: Fallback to config default
     return config.RISK_FREE_RATE
 
 
@@ -338,12 +357,17 @@ class CapeData:
 def get_current_cape() -> CapeData | None:
     """Fetch current Shiller CAPE ratio for market valuation assessment.
     
+    Data source priority:
+    1. Yale Shiller dataset (authoritative, via src/external/shiller.py)
+    2. yfinance SPY/^GSPC PE ratio estimate (fallback)
+    3. Conservative default (last resort)
+    
     The CAPE ratio uses 10-year inflation-adjusted earnings to smooth out
     business cycle fluctuations. Historical average is ~16-17.
     
     Returns:
         CapeData object with current CAPE and market state classification
-        None if fetch fails
+        None if all sources fail
     """
     cache_key = "shiller_cape"
     cached = default_cache.get(cache_key, expiry_hours=config.CAPE_CACHE_HOURS)
@@ -359,31 +383,51 @@ def get_current_cape() -> CapeData | None:
         except Exception:
             pass
     
+    # Priority 1: Try Yale Shiller dataset (authoritative source)
     try:
-        # Try multiple methods to get CAPE-like valuation
+        from src.external.shiller import get_current_cape as get_shiller_cape
+        shiller_cape = get_shiller_cape()
         
-        # Method 1: Try SPY ETF (more reliable than ^GSPC)
+        if shiller_cape and 5 < shiller_cape < 100:  # Sanity check
+            # Classify market state based on historical CAPE ranges
+            if shiller_cape < config.CAPE_LOW_THRESHOLD:
+                market_state = "CHEAP"
+            elif shiller_cape > config.CAPE_HIGH_THRESHOLD:
+                market_state = "EXPENSIVE"
+            else:
+                market_state = "FAIR"
+            
+            cape_data = CapeData(
+                cape_ratio=shiller_cape,
+                last_updated=datetime.now(),
+                market_state=market_state
+            )
+            default_cache.set(cache_key, cape_data.to_dict())
+            return cape_data
+    except Exception:
+        pass
+    
+    # Priority 2: Fallback to yfinance PE ratio estimate
+    try:
+        # Try SPY ETF (more reliable than ^GSPC)
         spy = yf.Ticker("SPY")
         spy_info = spy.info
         pe_ratio = spy_info.get('trailingPE')
         
-        # Method 2: If SPY fails, try S&P 500 index
+        # If SPY fails, try S&P 500 index
         if not pe_ratio or pe_ratio <= 0:
             sp500 = yf.Ticker("^GSPC")
             sp500_info = sp500.info
             pe_ratio = sp500_info.get('trailingPE')
         
-        # Method 3: Use forward PE if trailing not available
+        # Use forward PE if trailing not available
         if not pe_ratio or pe_ratio <= 0:
             pe_ratio = spy_info.get('forwardPE') or sp500_info.get('forwardPE')
         
         if pe_ratio and 5 < pe_ratio < 100:  # Sanity check
             # CAPE is typically 15-30% higher than TTM PE (due to smoothing)
-            # Use conservative 1.2x multiplier
             cape_estimate = pe_ratio * 1.2
             
-            # Classify market state based on historical CAPE ranges
-            # Historical: CAPE mean ~16-17, high 30+, low 10-15
             if cape_estimate < config.CAPE_LOW_THRESHOLD:
                 market_state = "CHEAP"
             elif cape_estimate > config.CAPE_HIGH_THRESHOLD:
@@ -396,17 +440,13 @@ def get_current_cape() -> CapeData | None:
                 last_updated=datetime.now(),
                 market_state=market_state
             )
-            
-            # Cache as dict for JSON serialization
             default_cache.set(cache_key, cape_data.to_dict())
             return cape_data
             
     except Exception:
         pass
     
-    # Fallback: Return a reasonable default based on recent market conditions
-    # As of Jan 2026, market is moderately valued (use ~25 as estimate)
-    # This prevents system from breaking when API fails
+    # Priority 3: Return a reasonable default based on recent market conditions
     try:
         fallback_cape = 25.0  # Moderate valuation
         cape_data = CapeData(

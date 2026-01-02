@@ -1,10 +1,13 @@
 """DCF-Aware Portfolio Optimization
 
-Extracts the DCF-specific optimization logic from modules/portfolio/optimizer.py.
-Uses DCF valuation results (upside %, conviction) to create Black-Litterman views.
+Portfolio optimizer that uses DCF valuation results (upside %, conviction)
+to create Black-Litterman views for Bayesian portfolio construction.
 
-This is a legacy toolkit for fundamental analysis-based portfolio construction.
-For production systematic portfolios, use src/models/optimizer.py.
+Features:
+- Conviction-based view weighting (HIGH/MODERATE/SPECULATIVE)
+- Monte Carlo probability as confidence weights
+- Automatic filtering of HOLD/PASS stocks
+- Integration with mean-variance optimization
 """
 
 import numpy as np
