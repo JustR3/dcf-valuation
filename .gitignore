@@ -57,3 +57,4 @@ htmlcov/
 
 # Environment secrets
 config/secrets.env
+config/secrets.env.backup
