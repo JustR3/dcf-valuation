@@ -16,7 +16,9 @@ https://pages.stern.nyu.edu/~adamodar/New_Home_Page/data.html
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
+from pathlib import Path
 import io
+import json
 import re
 
 import pandas as pd
@@ -120,21 +122,32 @@ class DamodaranLoader:
 
     # Cache configuration
     DEFAULT_CACHE_DAYS = 30
+    CACHE_DIR = "data/cache/damodaran"
     REQUEST_TIMEOUT_SECONDS = 30
     BETA_SHEET_HEADER_ROW = 9
     MARGIN_SHEET_HEADER_ROW = 8
 
     def __init__(self, cache_days: int = DEFAULT_CACHE_DAYS):
         """
-        Initialize Damodaran loader.
+        Initialize Damodaran loader with persistent file caching.
 
         Args:
             cache_days: Days to cache downloaded data (default 30)
         """
         self.cache_days = cache_days
-        self._beta_cache: Optional[pd.DataFrame] = None
-        self._margin_cache: Optional[pd.DataFrame] = None
-        self._cache_timestamp: Optional[datetime] = None
+        self.cache_dir = Path(self.CACHE_DIR)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Try to load from persistent disk cache first
+        self._beta_cache = self._load_from_disk("beta")
+        self._margin_cache = self._load_from_disk("margin")
+        self._cache_timestamp = self._load_timestamp()
+        
+        # If disk cache is invalid or missing, clear it
+        if not self._is_cache_valid():
+            self._beta_cache = None
+            self._margin_cache = None
+            self._cache_timestamp = None
 
     def get_sector_priors(self, sector: str) -> SectorPriors:
         """
@@ -174,8 +187,71 @@ class DamodaranLoader:
             )
             return self._get_generic_priors(sector)
 
+    def _load_from_disk(self, dataset: str) -> Optional[pd.DataFrame]:
+        """Load cached dataset from disk.
+        
+        Args:
+            dataset: Dataset name ("beta" or "margin")
+            
+        Returns:
+            Cached DataFrame or None if not found/invalid
+        """
+        cache_file = self.cache_dir / f"{dataset}_data.parquet"
+        
+        if cache_file.exists():
+            try:
+                df = pd.read_parquet(cache_file)
+                return df
+            except Exception:
+                # Cache file corrupted, will be re-downloaded
+                return None
+        return None
+    
+    def _save_to_disk(self, dataset: str, data: pd.DataFrame) -> None:
+        """Save dataset to disk.
+        
+        Args:
+            dataset: Dataset name ("beta" or "margin")
+            data: DataFrame to cache
+        """
+        try:
+            cache_file = self.cache_dir / f"{dataset}_data.parquet"
+            data.to_parquet(cache_file, compression='snappy', index=True)
+        except Exception as e:
+            # Fail silently - caching is optional
+            print(f"   ⚠️  Failed to save {dataset} cache to disk: {e}")
+    
+    def _load_timestamp(self) -> Optional[datetime]:
+        """Load cache timestamp from disk.
+        
+        Returns:
+            Timestamp of last cache refresh or None
+        """
+        timestamp_file = self.cache_dir / "timestamp.json"
+        
+        if timestamp_file.exists():
+            try:
+                with open(timestamp_file, 'r') as f:
+                    data = json.load(f)
+                    return datetime.fromisoformat(data['timestamp'])
+            except Exception:
+                return None
+        return None
+    
+    def _save_timestamp(self) -> None:
+        """Save cache timestamp to disk."""
+        try:
+            timestamp_file = self.cache_dir / "timestamp.json"
+            with open(timestamp_file, 'w') as f:
+                json.dump({
+                    'timestamp': self._cache_timestamp.isoformat(),
+                    'cache_days': self.cache_days
+                }, f, indent=2)
+        except Exception as e:
+            print(f"   ⚠️  Failed to save timestamp: {e}")
+
     def _refresh_cache(self) -> None:
-        """Download fresh data from Damodaran's website."""
+        """Download fresh data from Damodaran's website and persist to disk."""
         print("📥 Refreshing Damodaran datasets...")
 
         try:
@@ -195,6 +271,9 @@ class DamodaranLoader:
             print(
                 f"   ✅ Loaded {len(self._beta_cache)} industries from beta dataset"
             )
+            
+            # Save to disk for persistence
+            self._save_to_disk("beta", self._beta_cache)
 
         except Exception as e:
             print(f"   ❌ Failed to load beta data: {e}")
@@ -217,20 +296,73 @@ class DamodaranLoader:
             print(
                 f"   ✅ Loaded {len(self._margin_cache)} industries from margin dataset"
             )
+            
+            # Save to disk for persistence
+            self._save_to_disk("margin", self._margin_cache)
 
         except Exception as e:
             print(f"   ❌ Failed to load margin data: {e}")
             self._margin_cache = None
 
         self._cache_timestamp = datetime.now()
+        self._save_timestamp()
 
     def _is_cache_valid(self) -> bool:
-        """Check if cached data is still fresh."""
-        if self._beta_cache is None or self._cache_timestamp is None:
+        """Check if cached data is still fresh.
+        
+        Returns:
+            True if cache exists and is within expiry period
+        """
+        if self._cache_timestamp is None:
+            return False
+        
+        # Check if we have at least one dataset loaded
+        if self._beta_cache is None and self._margin_cache is None:
             return False
 
         age_days = (datetime.now() - self._cache_timestamp).days
-        return age_days < self.cache_days
+        is_valid = age_days < self.cache_days
+        
+        if not is_valid and self._cache_timestamp:
+            print(f"   ℹ️  Damodaran cache expired ({age_days} days old, max {self.cache_days} days)")
+        
+        return is_valid
+    
+    def get_cache_status(self) -> dict:
+        """Get current cache status information.
+        
+        Returns:
+            Dictionary with cache status details
+        """
+        if self._cache_timestamp is None:
+            return {
+                "status": "empty",
+                "message": "No cache available",
+                "beta_cached": False,
+                "margin_cached": False,
+                "cache_location": str(self.cache_dir),
+            }
+        
+        age_days = (datetime.now() - self._cache_timestamp).days
+        is_valid = age_days < self.cache_days
+        
+        return {
+            "status": "valid" if is_valid else "expired",
+            "timestamp": self._cache_timestamp.isoformat(),
+            "age_days": age_days,
+            "expires_in_days": max(0, self.cache_days - age_days),
+            "cache_days": self.cache_days,
+            "beta_cached": self._beta_cache is not None,
+            "margin_cached": self._margin_cache is not None,
+            "cache_location": str(self.cache_dir),
+        }
+    
+    def force_refresh(self) -> None:
+        """Force a cache refresh regardless of expiry status."""
+        self._beta_cache = None
+        self._margin_cache = None
+        self._cache_timestamp = None
+        self._refresh_cache()
 
     def _safe_float(self, value) -> Optional[float]:
         """Safely convert value to float, return None if invalid."""
