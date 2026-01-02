@@ -8,7 +8,7 @@ Data source: http://www.econ.yale.edu/~shiller/data.htm
 Update frequency: Monthly (Shiller updates dataset)
 
 Usage:
-    from src.pipeline.external.shiller import get_current_cape, get_equity_risk_scalar
+    from src.external.shiller import get_current_cape, get_equity_risk_scalar
     
     cape = get_current_cape()
     print(f"Current CAPE: {cape}")
@@ -56,6 +56,8 @@ def get_shiller_data() -> Optional[pd.DataFrame]:
         DataFrame with historical CAPE ratios and market data
         None if fetch fails
     """
+    from io import BytesIO
+    
     try:
         # Primary URL
         url = "http://www.econ.yale.edu/~shiller/data/ie_data.xls"
@@ -65,7 +67,7 @@ def get_shiller_data() -> Optional[pd.DataFrame]:
         response.raise_for_status()
         
         # Parse Excel (Shiller's file has specific format)
-        df = pd.read_excel(response.content, sheet_name="Data", skiprows=7)
+        df = pd.read_excel(BytesIO(response.content), sheet_name="Data", skiprows=7)
         
         # Clean column names
         df.columns = df.columns.str.strip()
@@ -90,11 +92,12 @@ def get_shiller_data() -> Optional[pd.DataFrame]:
     except Exception as e:
         print(f"⚠️  Failed to fetch Shiller data: {e}")
         # Try backup URL
+        from io import BytesIO
         try:
             backup_url = "https://shillerdata.com/ie_data.xls"
             response = requests.get(backup_url, timeout=30)
             response.raise_for_status()
-            df = pd.read_excel(response.content, sheet_name="Data", skiprows=7)
+            df = pd.read_excel(BytesIO(response.content), sheet_name="Data", skiprows=7)
             df.columns = df.columns.str.strip()
             
             # Find CAPE column

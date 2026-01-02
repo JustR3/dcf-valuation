@@ -1,13 +1,13 @@
-"""External data source integrations (FRED, Shiller, Damodaran, Fama-French)."""
+"""External data source integrations (FRED, Shiller, Damodaran)."""
 
-from src.pipeline.external.fred import FredConnector, get_fred_connector
-from src.pipeline.external.shiller import (
+from src.external.fred import FredConnector, get_fred_connector
+from src.external.shiller import (
     get_shiller_data,
     get_current_cape,
     get_equity_risk_scalar,
     display_cape_summary,
 )
-from src.pipeline.external.damodaran import (
+from src.external.damodaran import (
     DamodaranLoader,
     get_damodaran_loader,
     SectorPriors,

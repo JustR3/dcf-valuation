@@ -8,7 +8,7 @@ Requires FRED_API_KEY environment variable. Get free key at:
 https://fred.stlouisfed.org/docs/api/api_key.html
 
 Usage:
-    from src.pipeline.external.fred import get_fred_connector
+    from src.external.fred import get_fred_connector
     
     fred = get_fred_connector()
     macro_data = fred.get_macro_data()
