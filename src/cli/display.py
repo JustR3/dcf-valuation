@@ -84,7 +84,8 @@ def enrich_dcf_with_monte_carlo(engine: "DCFEngine", result: dict) -> dict:
                 'probability': mc_result['prob_undervalued'],
                 'var_95': mc_result['var_95'],
                 'upside_95': mc_result['upside_95'],
-                'median_value': mc_result['median_value']
+                'median_value': mc_result['median_value'],
+                'iterations': mc_result['iterations']
             }
 
             # Conviction rating
@@ -198,8 +199,9 @@ def _display_valuation_rich(result: dict, method: str, ticker: str, detailed: bo
         prob = mc_data['probability']
         var = mc_data['var_95']
         upside_95 = mc_data['upside_95']
+        iterations = mc_data.get('iterations', config.MONTE_CARLO_ITERATIONS)
 
-        summary_lines.append("[bold cyan]📊 Monte Carlo Analysis:[/bold cyan] [dim](3,000 simulations)[/dim]")
+        summary_lines.append(f"[bold cyan]📊 Monte Carlo Analysis:[/bold cyan] [dim]({iterations:,} simulations)[/dim]")
 
         prob_color = "green" if prob > 75 else "yellow" if prob > 40 else "red"
         summary_lines.append(f"Probability Undervalued: [{prob_color}]{prob:.1f}%[/{prob_color}]")
