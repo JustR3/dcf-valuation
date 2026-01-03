@@ -35,6 +35,11 @@ class CompanyData:
     trailing_pe: float | None = None
     pb_ratio: float | None = None
     ev_ebitda: float | None = None
+    peg_ratio: float | None = None
+    
+    # EPS data for PEG calculation
+    trailing_eps: float | None = None
+    forward_eps: float | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -44,6 +49,8 @@ class CompanyData:
             "revenue": self.revenue, "sector": self.sector,
             "forward_pe": self.forward_pe, "trailing_pe": self.trailing_pe,
             "pb_ratio": self.pb_ratio, "ev_ebitda": self.ev_ebitda,
+            "peg_ratio": self.peg_ratio, "trailing_eps": self.trailing_eps,
+            "forward_eps": self.forward_eps,
         }
 
 
@@ -188,6 +195,16 @@ class DCFEngine:
             trailing_pe = info.get("trailingPE")
             pb_ratio = info.get("priceToBook")
             ev_ebitda = info.get("enterpriseToEbitda")
+            
+            # Get EPS data for PEG calculation
+            trailing_eps = info.get("trailingEps")
+            forward_eps = info.get("forwardEps")
+            
+            # Calculate forward PEG ratio
+            peg_ratio = None
+            if forward_pe and trailing_eps and forward_eps and trailing_eps > 0:
+                from src.relative_valuation import calculate_forward_peg
+                peg_ratio, _ = calculate_forward_peg(forward_pe, trailing_eps, forward_eps)
 
             self._company_data = CompanyData(
                 ticker=self.ticker,
@@ -203,6 +220,9 @@ class DCFEngine:
                 trailing_pe=trailing_pe,
                 pb_ratio=pb_ratio,
                 ev_ebitda=ev_ebitda,
+                peg_ratio=peg_ratio,
+                trailing_eps=trailing_eps,
+                forward_eps=forward_eps,
             )
             self._last_error = None
             return True
@@ -653,6 +673,8 @@ class DCFEngine:
             trailing_pe=data.trailing_pe,
             pb_ratio=data.pb_ratio,
             ev_ebitda=data.ev_ebitda,
+            peg_ratio=data.peg_ratio,
+            use_live_peers=True,  # Use live peer multiples
         )
 
         return {
@@ -739,6 +761,8 @@ class DCFEngine:
             trailing_pe=data.trailing_pe,
             pb_ratio=data.pb_ratio,
             ev_ebitda=data.ev_ebitda,
+            peg_ratio=data.peg_ratio,
+            use_live_peers=True,  # Use live peer multiples
         )
         
         # Calculate implied fair values based on sector multiples

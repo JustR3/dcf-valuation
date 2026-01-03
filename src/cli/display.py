@@ -296,7 +296,7 @@ def _display_technical_details(result: dict) -> None:
 
 
 def _display_relative_valuation(result: dict) -> None:
-    """Display relative valuation metrics (P/E, P/B, EV/EBITDA)."""
+    """Display relative valuation metrics (P/E, P/B, EV/EBITDA, PEG)."""
     rel_data = result.get("relative_valuation")
     if not rel_data:
         return
@@ -307,13 +307,22 @@ def _display_relative_valuation(result: dict) -> None:
     benchmarks = rel_data.get("sector_benchmarks", {})
     premiums = rel_data.get("premiums", {})
     signals = rel_data.get("signals", {})
+    peer_ranges = rel_data.get("peer_ranges", {})
     sector = rel_data.get("sector", "Unknown")
+    peer_count = benchmarks.get("peer_count")
+    
+    # Create title with peer count
+    if peer_count:
+        table_title = f"Multiples vs {sector} Sector ({peer_count} peers)"
+    else:
+        table_title = f"Multiples vs {sector} Sector"
     
     # Create table comparing company to sector
-    rel_table = Table(title=f"Multiples vs {sector} Sector", box=box.SIMPLE)
+    rel_table = Table(title=table_title, box=box.SIMPLE)
     rel_table.add_column("Metric", style="bold")
     rel_table.add_column("Company", justify="right")
     rel_table.add_column("Sector Median", justify="right")
+    rel_table.add_column("Peer Range", justify="center")
     rel_table.add_column("Premium/Discount", justify="right")
     rel_table.add_column("Signal", justify="center")
     
@@ -323,6 +332,7 @@ def _display_relative_valuation(result: dict) -> None:
         pe_bench = benchmarks.get("median_pe")
         pe_prem = premiums.get("pe_premium")
         pe_signal = signals.get("pe_signal", "N/A")
+        pe_range = peer_ranges.get("pe_range")
         
         # Color code based on signal
         if "CHEAP" in pe_signal:
@@ -333,10 +343,13 @@ def _display_relative_valuation(result: dict) -> None:
             signal_color = "yellow"
         
         prem_str = f"{pe_prem:+.1f}%" if pe_prem is not None else "N/A"
+        range_str = f"[{pe_range[0]:.1f}x - {pe_range[1]:.1f}x]" if pe_range else "N/A"
+        
         rel_table.add_row(
             "Forward P/E",
             f"{pe:.2f}x",
             f"{pe_bench:.2f}x" if pe_bench else "N/A",
+            range_str,
             prem_str,
             f"[{signal_color}]{pe_signal}[/{signal_color}]"
         )
@@ -347,6 +360,7 @@ def _display_relative_valuation(result: dict) -> None:
         pb_bench = benchmarks.get("median_pb")
         pb_prem = premiums.get("pb_premium")
         pb_signal = signals.get("pb_signal", "N/A")
+        pb_range = peer_ranges.get("pb_range")
         
         if "CHEAP" in pb_signal:
             signal_color = "green"
@@ -356,10 +370,13 @@ def _display_relative_valuation(result: dict) -> None:
             signal_color = "yellow"
         
         prem_str = f"{pb_prem:+.1f}%" if pb_prem is not None else "N/A"
+        range_str = f"[{pb_range[0]:.1f}x - {pb_range[1]:.1f}x]" if pb_range else "N/A"
+        
         rel_table.add_row(
             "Price-to-Book",
             f"{pb:.2f}x",
             f"{pb_bench:.2f}x" if pb_bench else "N/A",
+            range_str,
             prem_str,
             f"[{signal_color}]{pb_signal}[/{signal_color}]"
         )
@@ -370,6 +387,7 @@ def _display_relative_valuation(result: dict) -> None:
         ev_bench = benchmarks.get("median_ev_ebitda")
         ev_prem = premiums.get("ev_ebitda_premium")
         ev_signal = signals.get("ev_ebitda_signal", "N/A")
+        ev_range = peer_ranges.get("ev_range")
         
         if "CHEAP" in ev_signal:
             signal_color = "green"
@@ -379,12 +397,37 @@ def _display_relative_valuation(result: dict) -> None:
             signal_color = "yellow"
         
         prem_str = f"{ev_prem:+.1f}%" if ev_prem is not None else "N/A"
+        range_str = f"[{ev_range[0]:.1f}x - {ev_range[1]:.1f}x]" if ev_range else "N/A"
+        
         rel_table.add_row(
             "EV/EBITDA",
             f"{ev:.2f}x",
             f"{ev_bench:.2f}x" if ev_bench else "N/A",
+            range_str,
             prem_str,
             f"[{signal_color}]{ev_signal}[/{signal_color}]"
+        )
+    
+    # PEG Ratio (Peter Lynch)
+    if multiples.get("peg_ratio"):
+        peg = multiples["peg_ratio"]
+        peg_signal = signals.get("peg_signal", "N/A")
+        
+        # PEG-specific color coding
+        if "CHEAP" in peg_signal or "UNDERVALUED" in peg_signal:
+            signal_color = "green"
+        elif "EXPENSIVE" in peg_signal or "OVERVALUED" in peg_signal:
+            signal_color = "red"
+        else:
+            signal_color = "yellow"
+        
+        rel_table.add_row(
+            "PEG Ratio",
+            f"{peg:.2f}",
+            "1.00 (fair)",  # PEG benchmark is always 1.0
+            "<1.0 = good",
+            "vs 1.0",
+            f"[{signal_color}]{peg_signal}[/{signal_color}]"
         )
     
     console.print(rel_table)

@@ -52,6 +52,17 @@ class AppConfig:
     CONVICTION_HIGH_PROBABILITY: float = 75.0  # 75% probability
     CONVICTION_MODERATE_PROBABILITY: float = 60.0  # 60% probability
 
+    # PEG Ratio Classification (Peter Lynch)
+    PEG_EXTREMELY_CHEAP: float = 0.5  # PEG < 0.5 = extreme value
+    PEG_UNDERVALUED: float = 1.0  # PEG < 1.0 = undervalued
+    PEG_FAIR_MAX: float = 1.5  # PEG 1.0-1.5 = fair value
+    PEG_MODERATE_MAX: float = 2.0  # PEG 1.5-2.0 = moderately expensive
+    # PEG > 2.0 = overvalued
+
+    # Peer Comparison Configuration
+    PEER_CACHE_HOURS: int = 24  # Cache peer multiples for 24 hours
+    MAX_PEERS_PER_SECTOR: int = 15  # Max peers to fetch
+
     # Cache Configuration
     CACHE_DIR: str = "data/cache"
     CACHE_EXPIRY_HOURS: int = 24  # Company data
@@ -119,6 +130,55 @@ class AppConfig:
         "Basic Materials": 1.5,
     }
 
+
+# Sector peer groups for live multiple comparison
+# Top 10-15 companies per sector by market cap (as of 2024-2025)
+SECTOR_PEERS = {
+    "Technology": [
+        "AAPL", "MSFT", "NVDA", "AVGO", "ORCL", "CRM", "ADBE", "CSCO",
+        "ACN", "AMD", "INTC", "IBM", "NOW", "QCOM", "TXN"
+    ],
+    "Communication Services": [
+        "GOOGL", "META", "NFLX", "DIS", "CMCSA", "T", "VZ", "TMUS",
+        "CHTR", "EA", "TTWO", "WBD", "PARA", "OMC", "IPG"
+    ],
+    "Healthcare": [
+        "LLY", "UNH", "JNJ", "ABBV", "MRK", "TMO", "ABT", "DHR",
+        "PFE", "BMY", "AMGN", "GILD", "CVS", "CI", "HUM"
+    ],
+    "Consumer Cyclical": [
+        "AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX", "LOW", "TJX",
+        "BKNG", "GM", "F", "MAR", "CMG", "YUM", "APTV"
+    ],
+    "Consumer Defensive": [
+        "WMT", "PG", "COST", "KO", "PEP", "PM", "MO", "MDLZ",
+        "CL", "KMB", "GIS", "K", "HSY", "CAG", "SJM"
+    ],
+    "Industrials": [
+        "UPS", "RTX", "HON", "UNP", "CAT", "BA", "GE", "LMT",
+        "MMM", "DE", "FDX", "NSC", "EMR", "ITW", "CSX"
+    ],
+    "Financial Services": [
+        "BRK.B", "JPM", "V", "MA", "BAC", "WFC", "MS", "GS",
+        "C", "BLK", "SPGI", "AXP", "SCHW", "CB", "PGR"
+    ],
+    "Energy": [
+        "XOM", "CVX", "COP", "SLB", "EOG", "MPC", "PSX", "VLO",
+        "PXD", "OXY", "HAL", "BKR", "WMB", "KMI", "HES"
+    ],
+    "Utilities": [
+        "NEE", "SO", "DUK", "D", "AEP", "EXC", "SRE", "PEG",
+        "XEL", "ED", "WEC", "ES", "DTE", "PPL", "ETR"
+    ],
+    "Real Estate": [
+        "PLD", "AMT", "EQIX", "CCI", "PSA", "WELL", "DLR", "O",
+        "SPG", "AVB", "EQR", "VICI", "VTR", "ARE", "INVH"
+    ],
+    "Basic Materials": [
+        "LIN", "APD", "SHW", "ECL", "NEM", "FCX", "DOW", "DD",
+        "NUE", "VMC", "MLM", "CF", "MOS", "ALB", "IFF"
+    ],
+}
 
 # Global config instance
 config = AppConfig()

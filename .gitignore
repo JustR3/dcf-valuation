@@ -58,3 +58,8 @@ htmlcov/
 # Environment secrets
 config/secrets.env
 config/secrets.env.backup
+
+
+# .github
+.github/
+.github/copilot-instructions.md
