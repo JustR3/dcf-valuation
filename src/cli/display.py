@@ -221,6 +221,9 @@ def _display_valuation_rich(result: dict, method: str, ticker: str, detailed: bo
     # Technical details (only if --detailed flag)
     if detailed and method == "DCF" and "cash_flows" in result:
         _display_technical_details(result)
+        # Also display relative valuation if available
+        if "relative_valuation" in result:
+            _display_relative_valuation(result)
 
     elif method == "EV/Sales":
         inputs = result["inputs"]
@@ -229,10 +232,13 @@ def _display_valuation_rich(result: dict, method: str, ticker: str, detailed: bo
             f"Avg EV/Sales: {inputs['avg_ev_sales_multiple']:.2f}x",
             title="EV/Sales Inputs", box=box.ROUNDED,
         ))
+        # Also show relative valuation for context
+        if "relative_valuation" in result:
+            _display_relative_valuation(result)
 
     # Help message
     if not detailed and method == "DCF":
-        console.print("\n[dim]💡 Run with --detailed flag for technical breakdown[/dim]")
+        console.print("\n[dim]💡 Run with --detailed flag for technical breakdown + relative valuation[/dim]")
 
 
 def _display_technical_details(result: dict) -> None:
@@ -287,6 +293,165 @@ def _display_technical_details(result: dict) -> None:
     # Growth cleaning warning
     if "growth_cleaning" in result and result["growth_cleaning"]:
         console.print(f"\n[yellow]{result['growth_cleaning']}[/yellow]")
+
+
+def _display_relative_valuation(result: dict) -> None:
+    """Display relative valuation metrics (P/E, P/B, EV/EBITDA)."""
+    rel_data = result.get("relative_valuation")
+    if not rel_data:
+        return
+    
+    console.print("\n[dim]═══ Relative Valuation Analysis ═══[/dim]\n")
+    
+    multiples = rel_data.get("multiples", {})
+    benchmarks = rel_data.get("sector_benchmarks", {})
+    premiums = rel_data.get("premiums", {})
+    signals = rel_data.get("signals", {})
+    sector = rel_data.get("sector", "Unknown")
+    
+    # Create table comparing company to sector
+    rel_table = Table(title=f"Multiples vs {sector} Sector", box=box.SIMPLE)
+    rel_table.add_column("Metric", style="bold")
+    rel_table.add_column("Company", justify="right")
+    rel_table.add_column("Sector Median", justify="right")
+    rel_table.add_column("Premium/Discount", justify="right")
+    rel_table.add_column("Signal", justify="center")
+    
+    # Forward P/E
+    if multiples.get("forward_pe"):
+        pe = multiples["forward_pe"]
+        pe_bench = benchmarks.get("median_pe")
+        pe_prem = premiums.get("pe_premium")
+        pe_signal = signals.get("pe_signal", "N/A")
+        
+        # Color code based on signal
+        if "CHEAP" in pe_signal:
+            signal_color = "green"
+        elif "EXPENSIVE" in pe_signal:
+            signal_color = "red"
+        else:
+            signal_color = "yellow"
+        
+        prem_str = f"{pe_prem:+.1f}%" if pe_prem is not None else "N/A"
+        rel_table.add_row(
+            "Forward P/E",
+            f"{pe:.2f}x",
+            f"{pe_bench:.2f}x" if pe_bench else "N/A",
+            prem_str,
+            f"[{signal_color}]{pe_signal}[/{signal_color}]"
+        )
+    
+    # Price-to-Book
+    if multiples.get("pb_ratio"):
+        pb = multiples["pb_ratio"]
+        pb_bench = benchmarks.get("median_pb")
+        pb_prem = premiums.get("pb_premium")
+        pb_signal = signals.get("pb_signal", "N/A")
+        
+        if "CHEAP" in pb_signal:
+            signal_color = "green"
+        elif "EXPENSIVE" in pb_signal:
+            signal_color = "red"
+        else:
+            signal_color = "yellow"
+        
+        prem_str = f"{pb_prem:+.1f}%" if pb_prem is not None else "N/A"
+        rel_table.add_row(
+            "Price-to-Book",
+            f"{pb:.2f}x",
+            f"{pb_bench:.2f}x" if pb_bench else "N/A",
+            prem_str,
+            f"[{signal_color}]{pb_signal}[/{signal_color}]"
+        )
+    
+    # EV/EBITDA
+    if multiples.get("ev_ebitda"):
+        ev = multiples["ev_ebitda"]
+        ev_bench = benchmarks.get("median_ev_ebitda")
+        ev_prem = premiums.get("ev_ebitda_premium")
+        ev_signal = signals.get("ev_ebitda_signal", "N/A")
+        
+        if "CHEAP" in ev_signal:
+            signal_color = "green"
+        elif "EXPENSIVE" in ev_signal:
+            signal_color = "red"
+        else:
+            signal_color = "yellow"
+        
+        prem_str = f"{ev_prem:+.1f}%" if ev_prem is not None else "N/A"
+        rel_table.add_row(
+            "EV/EBITDA",
+            f"{ev:.2f}x",
+            f"{ev_bench:.2f}x" if ev_bench else "N/A",
+            prem_str,
+            f"[{signal_color}]{ev_signal}[/{signal_color}]"
+        )
+    
+    console.print(rel_table)
+    
+    # Overall relative score and signal
+    overall_signal = signals.get("overall_signal", "N/A")
+    relative_score = rel_data.get("relative_score")
+    
+    if relative_score:
+        if "UNDERVALUED" in overall_signal:
+            overall_color = "green"
+            emoji = "📉"
+        elif "OVERVALUED" in overall_signal:
+            overall_color = "red"
+            emoji = "📈"
+        else:
+            overall_color = "yellow"
+            emoji = "➡️"
+        
+        console.print(f"\n{emoji} [bold]Overall Relative Signal:[/bold] [{overall_color}]{overall_signal}[/{overall_color}] (Score: {relative_score:.1f}/100)")
+    
+    # Blended valuation if available
+    blended = result.get("blended_valuation")
+    if blended:
+        console.print("\n[dim]═══ Blended Valuation (DCF + Relative) ═══[/dim]")
+        blended_table = Table(box=box.SIMPLE, show_header=False)
+        blended_table.add_column("Method", style="dim")
+        blended_table.add_column("Weight", justify="center")
+        blended_table.add_column("Fair Value", justify="right")
+        blended_table.add_column("Upside", justify="right")
+        
+        dcf_val = result.get("value_per_share", 0)
+        dcf_upside = result.get("upside_downside", 0)
+        dcf_weight = blended.get("dcf_weight", 0.6)
+        rel_weight = blended.get("relative_weight", 0.4)
+        
+        blended_val = blended.get("blended_value", 0)
+        blended_upside = blended.get("blended_upside", 0)
+        
+        blended_table.add_row(
+            "DCF Valuation",
+            f"{dcf_weight*100:.0f}%",
+            f"${dcf_val:.2f}",
+            f"{dcf_upside:+.1f}%"
+        )
+        
+        # Calculate implied relative value
+        implied_vals = result.get("implied_values", {})
+        avg_implied = implied_vals.get("average_implied")
+        if avg_implied:
+            rel_upside = ((avg_implied - result['current_price']) / result['current_price'] * 100)
+            blended_table.add_row(
+                "Relative Valuation",
+                f"{rel_weight*100:.0f}%",
+                f"${avg_implied:.2f}",
+                f"{rel_upside:+.1f}%"
+            )
+        
+        blended_color = "green" if blended_upside > 20 else "red" if blended_upside < -20 else "yellow"
+        blended_table.add_row(
+            "[bold]Blended (Triangulated)[/bold]",
+            "[bold]100%[/bold]",
+            f"[bold]${blended_val:.2f}[/bold]",
+            f"[{blended_color}][bold]{blended_upside:+.1f}%[/bold][/{blended_color}]"
+        )
+        
+        console.print(blended_table)
 
 
 # =============================================================================

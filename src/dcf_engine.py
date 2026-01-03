@@ -29,6 +29,12 @@ class CompanyData:
     analyst_growth: float | None = None
     revenue: float | None = None  # Total Revenue (millions, TTM)
     sector: str | None = None  # Company sector
+    
+    # Relative valuation metrics
+    forward_pe: float | None = None
+    trailing_pe: float | None = None
+    pb_ratio: float | None = None
+    ev_ebitda: float | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -36,6 +42,8 @@ class CompanyData:
             "current_price": self.current_price, "market_cap": self.market_cap,
             "beta": self.beta, "analyst_growth": self.analyst_growth,
             "revenue": self.revenue, "sector": self.sector,
+            "forward_pe": self.forward_pe, "trailing_pe": self.trailing_pe,
+            "pb_ratio": self.pb_ratio, "ev_ebitda": self.ev_ebitda,
         }
 
 
@@ -174,6 +182,12 @@ class DCFEngine:
                 # Final fallback to 1.0
                 if beta is None or beta <= 0:
                     beta = 1.0
+            
+            # Extract relative valuation metrics (for triangulation)
+            forward_pe = info.get("forwardPE")
+            trailing_pe = info.get("trailingPE")
+            pb_ratio = info.get("priceToBook")
+            ev_ebitda = info.get("enterpriseToEbitda")
 
             self._company_data = CompanyData(
                 ticker=self.ticker,
@@ -185,6 +199,10 @@ class DCFEngine:
                 analyst_growth=analyst_growth,
                 revenue=revenue,
                 sector=sector,
+                forward_pe=forward_pe,
+                trailing_pe=trailing_pe,
+                pb_ratio=pb_ratio,
+                ev_ebitda=ev_ebitda,
             )
             self._last_error = None
             return True
@@ -625,6 +643,17 @@ class DCFEngine:
             assessment = "OVERVALUED"
         else:
             assessment = "FAIRLY VALUED"
+        
+        # Calculate relative valuation metrics even for negative FCF companies
+        from src.relative_valuation import RelativeValuationEngine
+        
+        rel_engine = RelativeValuationEngine(self.ticker, data.sector)
+        relative_metrics = rel_engine.analyze(
+            forward_pe=data.forward_pe,
+            trailing_pe=data.trailing_pe,
+            pb_ratio=data.pb_ratio,
+            ev_ebitda=data.ev_ebitda,
+        )
 
         return {
             "ticker": self.ticker,
@@ -640,6 +669,8 @@ class DCFEngine:
                 "avg_ev_sales_multiple": avg_ev_sales,
             },
             "company_data": data.to_dict(),
+            # Add relative valuation for context
+            "relative_valuation": relative_metrics.to_dict(),
         }
 
     def get_intrinsic_value(self, growth: float | None = None, term_growth: float = 0.025,
@@ -695,6 +726,41 @@ class DCFEngine:
             assessment = "OVERVALUED"
         else:
             assessment = "FAIRLY VALUED"
+        
+        # Calculate relative valuation metrics for triangulation
+        from src.relative_valuation import (
+            RelativeValuationEngine,
+            calculate_implied_fair_value,
+        )
+        
+        rel_engine = RelativeValuationEngine(self.ticker, data.sector)
+        relative_metrics = rel_engine.analyze(
+            forward_pe=data.forward_pe,
+            trailing_pe=data.trailing_pe,
+            pb_ratio=data.pb_ratio,
+            ev_ebitda=data.ev_ebitda,
+        )
+        
+        # Calculate implied fair values based on sector multiples
+        implied_values = calculate_implied_fair_value(
+            current_price=data.current_price,
+            forward_pe=data.forward_pe,
+            sector_median_pe=relative_metrics.sector_median_pe or 18.0,
+            pb_ratio=data.pb_ratio,
+            sector_median_pb=relative_metrics.sector_median_pb or 3.0,
+            ev_ebitda=data.ev_ebitda,
+            sector_median_ev_ebitda=relative_metrics.sector_median_ev_ebitda or 14.0,
+        )
+        
+        # Calculate blended fair value (DCF weighted 60%, Relative 40%)
+        relative_fair_value = implied_values.get("average_implied")
+        if relative_fair_value:
+            blended_value = (0.60 * value_per_share) + (0.40 * relative_fair_value)
+            blended_upside = ((blended_value - data.current_price) / data.current_price * 100
+                            if data.current_price > 0 else 0)
+        else:
+            blended_value = value_per_share
+            blended_upside = upside
 
         return {
             "ticker": self.ticker,
@@ -712,6 +778,15 @@ class DCFEngine:
                       "years": years, "terminal_method": terminal_method},
             "growth_cleaning": growth_cleaning,  # Include cleaning message if applicable
             "company_data": data.to_dict(),
+            # NEW: Relative valuation section
+            "relative_valuation": relative_metrics.to_dict(),
+            "implied_values": implied_values,
+            "blended_valuation": {
+                "blended_value": blended_value,
+                "blended_upside": blended_upside,
+                "dcf_weight": 0.60,
+                "relative_weight": 0.40,
+            },
         }
 
     def calculate_implied_growth(self, target_price: float | None = None,
