@@ -17,16 +17,16 @@ uv run python setup_fred_key.py
 
 ```bash
 # Single stock
-uv run python dcf.py valuation AAPL
+uv run python main.py valuation AAPL
 
 # Detailed analysis
-uv run python dcf.py valuation AAPL --detailed
+uv run python main.py valuation AAPL --detailed
 
 # Compare stocks
-uv run python dcf.py compare AAPL MSFT GOOGL
+uv run python main.py compare AAPL MSFT GOOGL
 
 # Portfolio optimization
-uv run python dcf.py portfolio AAPL MSFT GOOGL NVDA
+uv run python main.py portfolio AAPL MSFT GOOGL NVDA
 ```
 
 ## ✅ System Status
@@ -105,10 +105,10 @@ uv run python test_stocks.py              # Test valuations
 uv run python setup_fred_key.py           # Setup FRED API
 
 # Valuation
-uv run python dcf.py valuation TICKER     # Basic
-uv run python dcf.py valuation TICKER --detailed  # Detailed
-uv run python dcf.py compare T1 T2 T3     # Compare
-uv run python dcf.py portfolio T1 T2 T3   # Optimize
+uv run python main.py valuation TICKER     # Basic
+uv run python main.py valuation TICKER --detailed  # Detailed
+uv run python main.py compare T1 T2 T3     # Compare
+uv run python main.py portfolio T1 T2 T3   # Optimize
 
 # Check config
 cat config/secrets.env | grep FRED        # Check API key

@@ -92,9 +92,9 @@ Each new Python process (new terminal session) needs to re-download if:
 
 If you run:
 ```bash
-uv run dcf.py valuation AAPL  # Downloads Damodaran data
+uv run main.py valuation AAPL  # Downloads Damodaran data
 # Exit program
-uv run dcf.py valuation MSFT  # Downloads again (new process)
+uv run main.py valuation MSFT  # Downloads again (new process)
 ```
 
 Each invocation is a separate Python process, so the in-memory cache doesn't persist.
@@ -220,15 +220,15 @@ class DamodaranLoader:
 **Add CLI command to force cache refresh:**
 
 ```bash
-uv run dcf.py refresh-data          # Refresh all external data
-uv run dcf.py refresh-data --damodaran  # Refresh only Damodaran
-uv run dcf.py refresh-data --fred      # Refresh only FRED
+uv run main.py refresh-data          # Refresh all external data
+uv run main.py refresh-data --damodaran  # Refresh only Damodaran
+uv run main.py refresh-data --fred      # Refresh only FRED
 ```
 
 **Implementation:**
 
 ```python
-# In dcf.py
+# In main.py
 def handle_refresh_command(args):
     """Refresh cached external data."""
     from src.external import get_damodaran_loader, get_fred_connector
@@ -258,7 +258,7 @@ def handle_refresh_command(args):
 **Show current cache status:**
 
 ```bash
-uv run dcf.py cache-status
+uv run main.py cache-status
 ```
 
 **Output:**
@@ -360,23 +360,23 @@ class DataCache:
 
 ### Before (Current):
 ```
-Session 1: uv run dcf.py valuation AAPL
+Session 1: uv run main.py valuation AAPL
   ├─ Download Damodaran (5 seconds)
   └─ Total: ~8 seconds
 
-Session 2: uv run dcf.py valuation MSFT
+Session 2: uv run main.py valuation MSFT
   ├─ Download Damodaran AGAIN (5 seconds)  ❌
   └─ Total: ~8 seconds
 ```
 
 ### After (Proposed):
 ```
-Session 1: uv run dcf.py valuation AAPL
+Session 1: uv run main.py valuation AAPL
   ├─ Download Damodaran (5 seconds)
   ├─ Save to disk
   └─ Total: ~8 seconds
 
-Session 2: uv run dcf.py valuation MSFT
+Session 2: uv run main.py valuation MSFT
   ├─ Load from disk (0.1 seconds)  ✅
   └─ Total: ~3 seconds
 ```
@@ -394,7 +394,7 @@ Session 2: uv run dcf.py valuation MSFT
    - Add disk I/O methods
    - Add timestamp management
 
-2. **`dcf.py`** (New commands)
+2. **`main.py`** (New commands)
    - Add `refresh-data` command
    - Add `cache-status` command
 

@@ -5,7 +5,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         USER ENTRY POINT                                 │
-│                          dcf.py (CLI)                                     │
+│                          main.py (CLI)                                     │
 │                                                                           │
 │  Options: Interactive Mode | Direct Command | Multiple Tickers           │
 └────────────────────────────┬────────────────────────────────────────────┘
@@ -101,7 +101,7 @@
 
 ## Detailed Process Flow
 
-### 1. **Entry Point: CLI Initialization** (`dcf.py`)
+### 1. **Entry Point: CLI Initialization** (`main.py`)
 
 **What it does:**
 - Parses command-line arguments
@@ -109,12 +109,12 @@
 - Routes to appropriate command handler
 
 **Available Options:**
-- **Interactive Mode** (default): `uv run dcf.py`
-- **Valuation**: `uv run dcf.py valuation AAPL`
+- **Interactive Mode** (default): `uv run main.py`
+- **Valuation**: `uv run main.py valuation AAPL`
   - Flags: `--scenarios`, `--sensitivity`, `--stress`, `--detailed`
-- **Portfolio**: `uv run dcf.py portfolio AAPL MSFT GOOGL`
+- **Portfolio**: `uv run main.py portfolio AAPL MSFT GOOGL`
   - Flags: `--method` (min_volatility, max_sharpe, efficient_risk)
-- **Compare**: `uv run dcf.py compare AAPL MSFT GOOGL`
+- **Compare**: `uv run main.py compare AAPL MSFT GOOGL`
 
 **Next Step:** Routes to command handler in `src/cli/commands.py`
 
@@ -487,7 +487,7 @@ SECTOR_GROWTH_PRIORS = {
 ```
 User Input (Ticker)
     ↓
-CLI Parser (dcf.py)
+CLI Parser (main.py)
     ↓
 Command Handler (cli/commands.py)
     ↓

@@ -72,23 +72,23 @@ loader.force_refresh()  # Re-downloads data
 
 ### Before (In-Memory Only):
 ```
-Session 1: uv run dcf.py valuation AAPL
+Session 1: uv run main.py valuation AAPL
   ├─ Download Damodaran: ~2.0 seconds
   └─ Total: ~7 seconds
 
-Session 2: uv run dcf.py valuation MSFT
+Session 2: uv run main.py valuation MSFT
   ├─ Download Damodaran: ~2.0 seconds ❌
   └─ Total: ~7 seconds
 ```
 
 ### After (Persistent Cache):
 ```
-Session 1: uv run dcf.py valuation AAPL
+Session 1: uv run main.py valuation AAPL
   ├─ Download Damodaran: ~2.0 seconds
   ├─ Save to disk: ~0.05 seconds
   └─ Total: ~7 seconds
 
-Session 2: uv run dcf.py valuation MSFT
+Session 2: uv run main.py valuation MSFT
   ├─ Load from disk: ~0.01 seconds ✅
   └─ Total: ~5 seconds
 ```
@@ -114,7 +114,7 @@ $ uv run python tests/test_damodaran_cache.py
 ### Real-World Test:
 
 ```bash
-$ uv run dcf.py valuation AAPL
+$ uv run main.py valuation AAPL
 # First run after implementation
 ✅ Found Technology beta: 1.24 (unlevered: 1.20)  # Loaded from cache!
 ✅ Found Technology operating margin: 36.74%
@@ -219,8 +219,8 @@ From [CACHING_ANALYSIS.md](CACHING_ANALYSIS.md):
 
 1. **CLI Commands** (Recommendation 3):
    ```bash
-   uv run dcf.py cache-status     # View cache state
-   uv run dcf.py refresh-data     # Force refresh
+   uv run main.py cache-status     # View cache state
+   uv run main.py refresh-data     # Force refresh
    ```
 
 2. **Dataset-Specific Expiry** (Recommendation 2):

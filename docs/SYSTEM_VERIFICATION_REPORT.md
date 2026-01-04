@@ -152,16 +152,16 @@ uv run python setup_fred_key.py
 ### Run Valuations
 ```bash
 # Single stock
-uv run python dcf.py valuation TICKER
+uv run python main.py valuation TICKER
 
 # Detailed breakdown
-uv run python dcf.py valuation TICKER --detailed
+uv run python main.py valuation TICKER --detailed
 
 # Compare stocks
-uv run python dcf.py compare TICKER1 TICKER2 TICKER3
+uv run python main.py compare TICKER1 TICKER2 TICKER3
 
 # Portfolio optimization
-uv run python dcf.py portfolio TICKER1 TICKER2 TICKER3 TICKER4
+uv run python main.py portfolio TICKER1 TICKER2 TICKER3 TICKER4
 ```
 
 ## Verification Commands
@@ -177,7 +177,7 @@ uv run python test_integrations.py
 uv run python test_stocks.py
 
 # Test main CLI
-uv run python dcf.py valuation LKQ --detailed
+uv run python main.py valuation LKQ --detailed
 ```
 
 ## System Grade: A+

@@ -6,21 +6,21 @@ All heavy lifting is delegated to modular components in src/.
 
 Usage Examples:
     # Interactive mode
-    uv run dcf.py
+    uv run main.py
     
     # Single stock valuation
-    uv run dcf.py valuation AAPL
-    uv run dcf.py dcf AAPL --detailed
-    uv run dcf.py val AAPL --scenarios
-    uv run dcf.py val AAPL --stress
+    uv run main.py valuation AAPL
+    uv run main.py dcf AAPL --detailed
+    uv run main.py val AAPL --scenarios
+    uv run main.py val AAPL --stress
     
     # Multi-stock comparison
-    uv run dcf.py compare AAPL MSFT GOOGL
-    uv run dcf.py val AAPL MSFT GOOGL --compare
+    uv run main.py compare AAPL MSFT GOOGL
+    uv run main.py val AAPL MSFT GOOGL --compare
     
     # Portfolio optimization
-    uv run dcf.py portfolio AAPL MSFT GOOGL NVDA
-    uv run dcf.py port AAPL MSFT --method min_volatility
+    uv run main.py portfolio AAPL MSFT GOOGL NVDA
+    uv run main.py port AAPL MSFT --method min_volatility
 """
 
 from __future__ import annotations

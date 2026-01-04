@@ -52,13 +52,13 @@ uv sync
 
 **Single Stock Valuation:**
 ```bash
-uv run python dcf.py valuation AAPL
+uv run python main.py valuation AAPL
 ```
 
 **Multi-Stock Comparison:**
 ```bash
 # Uses parallel fetching automatically (5-10x faster!)
-uv run python dcf.py compare AAPL MSFT GOOGL AMZN
+uv run python main.py compare AAPL MSFT GOOGL AMZN
 
 # Test performance improvement
 uv run python test_parallel_performance.py
@@ -66,7 +66,7 @@ uv run python test_parallel_performance.py
 
 **Portfolio Optimization:**
 ```bash
-uv run python dcf.py portfolio AAPL MSFT GOOGL --method max_sharpe
+uv run python main.py portfolio AAPL MSFT GOOGL --method max_sharpe
 ```
 
 ### Development
@@ -89,7 +89,7 @@ uv run ruff format src/
 
 ```
 dcf-valuation/
-├── dcf.py                     # Lightweight CLI entry point
+├── main.py                    # Lightweight CLI entry point
 ├── src/
 │   ├── __init__.py            # Package exports
 │   ├── config.py              # Configuration constants

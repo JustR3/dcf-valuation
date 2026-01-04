@@ -176,8 +176,8 @@ uv run python test_integrations.py
 uv run python test_stocks.py
 
 # 4. Use the main CLI
-uv run python dcf.py valuation TICKER
-uv run python dcf.py portfolio AAPL MSFT GOOGL NVDA
+uv run python main.py valuation TICKER
+uv run python main.py portfolio AAPL MSFT GOOGL NVDA
 ```
 
 ---
