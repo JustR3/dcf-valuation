@@ -1,0 +1,220 @@
+{
+  "summary": {
+    "total_stocks": 18,
+    "failed_stocks": 2
+  },
+  "terminal_value_analysis": {
+    "average_terminal_pct": 77.27281438973495,
+    "median_terminal_pct": 79.90863063253659,
+    "max_terminal_pct": 86.87074920868642,
+    "stocks_above_75pct": 13,
+    "stocks_above_80pct": 9
+  },
+  "conflict_analysis": {
+    "total_conflicts": 0,
+    "conflict_rate": 0.0,
+    "conflicted_stocks": []
+  },
+  "monte_carlo_analysis": {
+    "average_probability": 63.01222222222221,
+    "median_probability": 89.19,
+    "stocks_above_95pct": 8,
+    "stocks_above_90pct": 9,
+    "average_interval_width": 157.66156774123007,
+    "stocks_too_narrow": 2
+  },
+  "growth_analysis": {
+    "high_growth_count": 5,
+    "high_growth_stocks": [
+      {
+        "ticker": "NVDA",
+        "analyst_growth": 87.2861386138614,
+        "growth_used": 42.114455445544564
+      },
+      {
+        "ticker": "AAPL",
+        "analyst_growth": 22.88697986577181,
+        "growth_used": 22.88697986577181
+      },
+      {
+        "ticker": "MSFT",
+        "analyst_growth": 33.39772241992882,
+        "growth_used": 26.978405693950176
+      },
+      {
+        "ticker": "F",
+        "analyst_growth": 26.487179487179496,
+        "growth_used": 14.7948717948718
+      },
+      {
+        "ticker": "IBM",
+        "analyst_growth": 45.16119047619048,
+        "growth_used": 25.26447619047619
+      }
+    ]
+  },
+  "valuation_extremes": {
+    "extreme_count": 4,
+    "extreme_stocks": [
+      {
+        "ticker": "F",
+        "upside": 643.3892805946468,
+        "fair_value": 99.16813003132589,
+        "current_price": 13.34
+      },
+      {
+        "ticker": "IBM",
+        "upside": 117.79158056481296,
+        "fair_value": 634.8624573464298,
+        "current_price": 291.5
+      },
+      {
+        "ticker": "BAC",
+        "upside": 583.813876962632,
+        "fair_value": 382.5938641605926,
+        "current_price": 55.95
+      },
+      {
+        "ticker": "VZ",
+        "upside": 251.84149417797008,
+        "fair_value": 142.5661734409135,
+        "current_price": 40.52
+      }
+    ]
+  },
+  "worst_offenders": [
+    {
+      "ticker": "IBM",
+      "description": "Turnaround - IBM",
+      "warning_count": 5,
+      "warnings": [
+        "Terminal value dominates: 86.5% of EV",
+        "Large blending adjustment: DCF +117.8% \u2192 Blended +70.1%",
+        "Monte Carlo overconfident: 100.0% probability",
+        "Very high analyst growth: 45.2%",
+        "Extreme valuation: +117.8% upside"
+      ],
+      "dcf_upside": 117.79158056481296,
+      "terminal_value_pct": 86.46399730172023,
+      "mc_probability": 100.0
+    },
+    {
+      "ticker": "VZ",
+      "description": "Defensive Telecom - Verizon",
+      "warning_count": 5,
+      "warnings": [
+        "Terminal value dominates: 80.1% of EV",
+        "Large blending adjustment: DCF +251.8% \u2192 Blended +191.0%",
+        "Monte Carlo overconfident: 100.0% probability",
+        "High PEG ratio: 3.62 (growth priced in)",
+        "Extreme valuation: +251.8% upside"
+      ],
+      "dcf_upside": 251.84149417797008,
+      "terminal_value_pct": 80.05049589640156,
+      "mc_probability": 100.0
+    },
+    {
+      "ticker": "JNJ",
+      "description": "Mature Healthcare - Johnson & Johnson",
+      "warning_count": 3,
+      "warnings": [
+        "Terminal value dominates: 79.5% of EV",
+        "Large blending adjustment: DCF +74.7% \u2192 Blended +35.1%",
+        "Monte Carlo overconfident: 99.1% probability"
+      ],
+      "dcf_upside": 74.7284026937003,
+      "terminal_value_pct": 79.48088839450345,
+      "mc_probability": 99.14
+    },
+    {
+      "ticker": "NVDA",
+      "description": "High-growth Tech - NVIDIA",
+      "warning_count": 3,
+      "warnings": [
+        "Terminal value dominates: 86.9% of EV",
+        "Monte Carlo overconfident: 100.0% probability",
+        "Very high analyst growth: 87.3%"
+      ],
+      "dcf_upside": 18.291421588712474,
+      "terminal_value_pct": 86.87074920868642,
+      "mc_probability": 100.0
+    },
+    {
+      "ticker": "MSFT",
+      "description": "Mega-cap Tech - Microsoft",
+      "warning_count": 3,
+      "warnings": [
+        "Terminal value dominates: 86.2% of EV",
+        "Monte Carlo overconfident: 99.8% probability",
+        "Very high analyst growth: 33.4%"
+      ],
+      "dcf_upside": 53.03189569020114,
+      "terminal_value_pct": 86.2013550641818,
+      "mc_probability": 99.82
+    },
+    {
+      "ticker": "GOOGL",
+      "description": "Mega-cap Tech - Google",
+      "warning_count": 3,
+      "warnings": [
+        "Terminal value dominates: 80.4% of EV",
+        "Large blending adjustment: DCF +22.7% \u2192 Blended -7.9%",
+        "High PEG ratio: 2.65 (growth priced in)"
+      ],
+      "dcf_upside": 22.655306416770628,
+      "terminal_value_pct": 80.3855950561792,
+      "mc_probability": 87.0
+    },
+    {
+      "ticker": "F",
+      "description": "Cyclical Auto - Ford",
+      "warning_count": 3,
+      "warnings": [
+        "Large blending adjustment: DCF +643.4% \u2192 Blended +527.3%",
+        "Monte Carlo overconfident: 100.0% probability",
+        "Extreme valuation: +643.4% upside"
+      ],
+      "dcf_upside": 643.3892805946468,
+      "terminal_value_pct": 74.28405776493098,
+      "mc_probability": 100.0
+    },
+    {
+      "ticker": "INTC",
+      "description": "Turnaround - Intel",
+      "warning_count": 3,
+      "warnings": [
+        "Terminal value dominates: 81.8% of EV",
+        "Large blending adjustment: DCF -94.0% \u2192 Blended -4.2%",
+        "Monte Carlo too narrow: 4.7% confidence interval"
+      ],
+      "dcf_upside": -93.97080233691963,
+      "terminal_value_pct": 81.75013853954282,
+      "mc_probability": 0.0
+    },
+    {
+      "ticker": "BAC",
+      "description": "Financial - Bank of America",
+      "warning_count": 3,
+      "warnings": [
+        "Large blending adjustment: DCF +583.8% \u2192 Blended +378.2%",
+        "Monte Carlo overconfident: 100.0% probability",
+        "Extreme valuation: +583.8% upside"
+      ],
+      "dcf_upside": 583.813876962632,
+      "terminal_value_pct": 69.30741713606008,
+      "mc_probability": 100.0
+    },
+    {
+      "ticker": "KO",
+      "description": "Mature Consumer - Coca-Cola",
+      "warning_count": 2,
+      "warnings": [
+        "Terminal value dominates: 79.8% of EV",
+        "High PEG ratio: 3.23 (growth priced in)"
+      ],
+      "dcf_upside": 47.74298653696222,
+      "terminal_value_pct": 79.76676536867163,
+      "mc_probability": 91.38
+    }
+  ]
+}

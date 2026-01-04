@@ -1,0 +1,16 @@
+{
+  "results": [
+    {
+      "ticker": "KO",
+      "description": "Mature Consumer - Coca-Cola",
+      "current_price": 69.12,
+      "dcf_fair_value": 102.1199522943483,
+      "dcf_upside": 47.74298653696222,
+      "terminal_value_pct": 79.76676536867163,
+      "terminal_method": "gordon_growth",
+      "analyst_growth": 0.06653642384105964,
+      "growth_used": 0.06653642384105964,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": 20.054541951467517,
+      "dcf_vs_relative_conflict": 

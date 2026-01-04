@@ -1,0 +1,445 @@
+{
+  "results": [
+    {
+      "ticker": "KO",
+      "description": "Mature Consumer - Coca-Cola",
+      "current_price": 69.12,
+      "dcf_fair_value": 59.03477015176026,
+      "dcf_upside": -14.5908996646987,
+      "terminal_value_pct": 65.0,
+      "terminal_method": "gordon_growth",
+      "analyst_growth": 0.06653642384105964,
+      "growth_used": 0.06653642384105964,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": -17.34578976952902,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 2.68,
+      "mc_confidence_interval": [
+        48.41655122917907,
+        67.32330867050828
+      ],
+      "mc_interval_width": 27.35352639081194,
+      "warnings": [
+        "High PEG ratio: 3.23 (growth priced in)"
+      ]
+    },
+    {
+      "ticker": "PG",
+      "description": "Mature Consumer - Procter & Gamble",
+      "current_price": 141.79,
+      "dcf_fair_value": 102.27821101157595,
+      "dcf_upside": -27.866414407521013,
+      "terminal_value_pct": 65.00000000000001,
+      "terminal_method": "gordon_growth",
+      "analyst_growth": 0.0730496350364964,
+      "growth_used": 0.0730496350364964,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": -11.762985653998788,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 0.0,
+      "mc_confidence_interval": [
+        83.3903439746066,
+        116.48362988153276
+      ],
+      "mc_interval_width": 23.33964730018067,
+      "warnings": [
+        "High PEG ratio: 2.64 (growth priced in)"
+      ]
+    },
+    {
+      "ticker": "JNJ",
+      "description": "Mature Healthcare - Johnson & Johnson",
+      "current_price": 207.35,
+      "dcf_fair_value": 212.401732951864,
+      "dcf_upside": 2.4363313006337166,
+      "terminal_value_pct": 65.0,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.11347342995169085,
+      "growth_used": 0.11347342995169085,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": -8.25637211466504,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 37.7,
+      "mc_confidence_interval": [
+        166.10163991995364,
+        242.4808321970592
+      ],
+      "mc_interval_width": 36.83587763544999,
+      "warnings": []
+    },
+    {
+      "ticker": "NVDA",
+      "description": "High-growth Tech - NVIDIA",
+      "current_price": 188.85,
+      "dcf_fair_value": 83.79963751236458,
+      "dcf_upside": -55.62635027145111,
+      "terminal_value_pct": 65.0,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.872861386138614,
+      "growth_used": 0.42114455445544563,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": -50.089461971753444,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 0.0,
+      "mc_confidence_interval": [
+        41.08018171997183,
+        76.46889701393971
+      ],
+      "mc_interval_width": 18.73906025627105,
+      "warnings": [
+        "Monte Carlo too narrow: 18.7% confidence interval",
+        "Very high analyst growth: 87.3%"
+      ]
+    },
+    {
+      "ticker": "NOW",
+      "description": "High-growth SaaS - ServiceNow",
+      "current_price": 147.45,
+      "dcf_fair_value": 23.481215757449398,
+      "dcf_upside": -84.07513343001057,
+      "terminal_value_pct": 65.0,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.014730545454545456,
+      "growth_used": 0.014730545454545456,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": -67.61849388338203,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 0.0,
+      "mc_confidence_interval": [
+        20.094073724632864,
+        26.939902302900375
+      ],
+      "mc_interval_width": 4.642813549181087,
+      "warnings": [
+        "Monte Carlo too narrow: 4.6% confidence interval"
+      ]
+    },
+    {
+      "ticker": "PLTR",
+      "description": "High-growth AI - Palantir",
+      "current_price": 167.86,
+      "dcf_fair_value": 8.482254998878842,
+      "dcf_upside": -94.94682771423875,
+      "terminal_value_pct": 65.0,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.012957727272727275,
+      "growth_used": 0.012957727272727275,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": -92.2199661833584,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 0.0,
+      "mc_confidence_interval": [
+        7.29833964327566,
+        9.707071857785003
+      ],
+      "mc_interval_width": 1.4349649794527244,
+      "warnings": [
+        "Monte Carlo too narrow: 1.4% confidence interval"
+      ]
+    },
+    {
+      "ticker": "AAPL",
+      "description": "Mega-cap Tech - Apple",
+      "current_price": 271.01,
+      "dcf_fair_value": 132.31350650405764,
+      "dcf_upside": -51.177629421771286,
+      "terminal_value_pct": 65.0,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.2288697986577181,
+      "growth_used": 0.2288697986577181,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": -47.40556480516559,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 0.0,
+      "mc_confidence_interval": [
+        91.99192099782557,
+        157.24065409556735
+      ],
+      "mc_interval_width": 24.07613486503885,
+      "warnings": []
+    },
+    {
+      "ticker": "MSFT",
+      "description": "Mega-cap Tech - Microsoft",
+      "current_price": 472.94,
+      "dcf_fair_value": 285.3358893935724,
+      "dcf_upside": -39.667634500449864,
+      "terminal_value_pct": 64.99999999999999,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.3339772241992882,
+      "growth_used": 0.26978405693950175,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": -24.832089835245295,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 0.0,
+      "mc_confidence_interval": [
+        196.53404752979992,
+        377.9899569993707
+      ],
+      "mc_interval_width": 38.367638488935334,
+      "warnings": [
+        "Very high analyst growth: 33.4%"
+      ]
+    },
+    {
+      "ticker": "GOOGL",
+      "description": "Mega-cap Tech - Google",
+      "current_price": 315.15,
+      "dcf_fair_value": 216.62608255025094,
+      "dcf_upside": -31.26254718380106,
+      "terminal_value_pct": 65.0,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.10627766798418979,
+      "growth_used": 0.08939436758893285,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": -40.21274929044253,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 0.0,
+      "mc_confidence_interval": [
+        172.04471603570138,
+        239.54361834453798
+      ],
+      "mc_interval_width": 21.418023896188036,
+      "warnings": [
+        "High PEG ratio: 2.65 (growth priced in)"
+      ]
+    },
+    {
+      "ticker": "F",
+      "description": "Cyclical Auto - Ford",
+      "current_price": 13.34,
+      "dcf_fair_value": 72.86291152701116,
+      "dcf_upside": 446.1987370840417,
+      "terminal_value_pct": 64.99999999999999,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.26487179487179496,
+      "growth_used": 0.147948717948718,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": 409.0251116392657,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 100.0,
+      "mc_confidence_interval": [
+        43.883359372266376,
+        94.00540768875628
+      ],
+      "mc_interval_width": 375.72749862436206,
+      "warnings": [
+        "Large blending adjustment: DCF +446.2% \u2192 Blended +409.0%",
+        "Monte Carlo overconfident: 100.0% probability",
+        "Extreme valuation: +446.2% upside"
+      ]
+    },
+    {
+      "ticker": "GM",
+      "description": "Cyclical Auto - GM",
+      "current_price": 80.98,
+      "dcf_fair_value": 32.93743884053826,
+      "dcf_upside": -59.32645240733729,
+      "terminal_value_pct": 56.51545155569996,
+      "terminal_method": "gordon_growth",
+      "analyst_growth": 0.012240992366412214,
+      "growth_used": 0.012240992366412214,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": 122.50473154787713,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 0.0,
+      "mc_confidence_interval": [
+        25.37721918494705,
+        41.746244266104185
+      ],
+      "mc_interval_width": 20.213663967840372,
+      "warnings": [
+        "Large blending adjustment: DCF -59.3% \u2192 Blended +122.5%"
+      ]
+    },
+    {
+      "ticker": "CF",
+      "description": "Cyclical Materials - CF Industries",
+      "current_price": 80.13,
+      "dcf_fair_value": 144.07672296827153,
+      "dcf_upside": 79.80372266101526,
+      "terminal_value_pct": 64.0822556871868,
+      "terminal_method": "gordon_growth",
+      "analyst_growth": -0.10594195888754529,
+      "growth_used": -0.10594195888754529,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": 89.95365594868825,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 99.92,
+      "mc_confidence_interval": [
+        113.67394806704051,
+        186.5900337780548
+      ],
+      "mc_interval_width": 90.99723662924532,
+      "warnings": [
+        "Monte Carlo overconfident: 99.9% probability"
+      ]
+    },
+    {
+      "ticker": "INTC",
+      "description": "Turnaround - Intel",
+      "current_price": 39.38,
+      "dcf_fair_value": 1.2380174368784043,
+      "dcf_upside": -96.85622794088776,
+      "terminal_value_pct": 65.0,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.08924833333333333,
+      "growth_used": 0.08924833333333333,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": -5.948916773862712,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 0.0,
+      "mc_confidence_interval": [
+        1.0025281349326551,
+        1.4014880527886189
+      ],
+      "mc_interval_width": 1.0131028894260123,
+      "warnings": [
+        "Large blending adjustment: DCF -96.9% \u2192 Blended -5.9%",
+        "Monte Carlo too narrow: 1.0% confidence interval"
+      ]
+    },
+    {
+      "ticker": "IBM",
+      "description": "Turnaround - IBM",
+      "current_price": 291.5,
+      "dcf_fair_value": 245.5285695907942,
+      "dcf_upside": -15.77064508034504,
+      "terminal_value_pct": 65.0,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.45161190476190477,
+      "growth_used": 0.2526447619047619,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": -10.085204847272497,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 17.88,
+      "mc_confidence_interval": [
+        175.71706173942533,
+        341.5181461859813
+      ],
+      "mc_interval_width": 56.87858814633139,
+      "warnings": [
+        "Very high analyst growth: 45.2%"
+      ]
+    },
+    {
+      "ticker": "RDDT",
+      "description": "Loss-making Tech - Reddit",
+      "current_price": 241.89,
+      "dcf_fair_value": 58.41732645101801,
+      "dcf_upside": -75.8496314642945,
+      "terminal_value_pct": 65.0,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.018331009174311925,
+      "growth_used": 0.018331009174311925,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": -76.50399458135841,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 0.0,
+      "mc_confidence_interval": [
+        49.87019297593439,
+        66.95010133621683
+      ],
+      "mc_interval_width": 7.0610229278938546,
+      "warnings": [
+        "Monte Carlo too narrow: 7.1% confidence interval"
+      ]
+    },
+    {
+      "ticker": "BAC",
+      "description": "Financial - Bank of America",
+      "current_price": 55.95,
+      "dcf_fair_value": 335.50839654239894,
+      "dcf_upside": 499.65754520536007,
+      "terminal_value_pct": 65.0,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.1904535519125682,
+      "growth_used": 0.11218142076502727,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": 327.7422716454054,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 100.0,
+      "mc_confidence_interval": [
+        198.20713796925858,
+        353.3787269879502
+      ],
+      "mc_interval_width": 277.33974802268386,
+      "warnings": [
+        "Large blending adjustment: DCF +499.7% \u2192 Blended +327.7%",
+        "Monte Carlo overconfident: 100.0% probability",
+        "Extreme valuation: +499.7% upside"
+      ]
+    },
+    {
+      "ticker": "T",
+      "description": "Defensive Telecom - AT&T",
+      "current_price": 24.56,
+      "dcf_fair_value": 13.714977699097405,
+      "dcf_upside": -44.15725692549916,
+      "terminal_value_pct": 62.462758959901734,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": -0.2730390879478827,
+      "growth_used": -0.2730390879478827,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": 5.943467538548248,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 2.9000000000000004,
+      "mc_confidence_interval": [
+        11.21756951826845,
+        23.623155110320535
+      ],
+      "mc_interval_width": 50.51134198718277,
+      "warnings": [
+        "Large blending adjustment: DCF -44.2% \u2192 Blended +5.9%"
+      ]
+    },
+    {
+      "ticker": "VZ",
+      "description": "Defensive Telecom - Verizon",
+      "current_price": 40.52,
+      "dcf_fair_value": 81.26069891696658,
+      "dcf_upside": 100.54466662627486,
+      "terminal_value_pct": 65.0,
+      "terminal_method": "exit_multiple",
+      "analyst_growth": 0.023302771855010587,
+      "growth_used": 0.023302771855010587,
+      "revenue_5y_cagr": null,
+      "relative_signal": "UNKNOWN",
+      "relative_upside": 100.24751396521461,
+      "dcf_vs_relative_conflict": false,
+      "mc_probability": 100.0,
+      "mc_confidence_interval": [
+        68.75786828967745,
+        93.43948100100165
+      ],
+      "mc_interval_width": 60.912173522517776,
+      "warnings": [
+        "Monte Carlo overconfident: 100.0% probability",
+        "High PEG ratio: 3.62 (growth priced in)",
+        "Extreme valuation: +100.5% upside"
+      ]
+    }
+  ],
+  "failed": [
+    "RIVN",
+    "JPM"
+  ],
+  "timestamp": "2026-01-04T23:09:06.531803"
+}

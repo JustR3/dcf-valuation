@@ -139,7 +139,7 @@ SECTOR_PEERS = {
         "ACN", "AMD", "INTC", "IBM", "NOW", "QCOM", "TXN"
     ],
     "Communication Services": [
-        "GOOGL", "META", "NFLX", "DIS", "CMCSA", "T", "VZ", "TMUS",
+        "GOOG", "META", "NFLX", "DIS", "CMCSA", "T", "VZ", "TMUS",
         "CHTR", "EA", "TTWO", "WBD", "PARA", "OMC", "IPG"
     ],
     "Healthcare": [

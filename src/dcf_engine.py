@@ -63,6 +63,39 @@ class DCFEngine:
     MIN_GROWTH_THRESHOLD: float = config.MIN_GROWTH_RATE
     MAX_GROWTH_THRESHOLD: float = config.MAX_GROWTH_RATE
     SECTOR_GROWTH_PRIORS: dict = config.SECTOR_GROWTH_PRIORS
+    
+    # Terminal value constraints (diagnostic-driven)
+    MAX_TERMINAL_VALUE_PCT: float = 0.65  # Terminal value should not exceed 65% of EV
+    
+    # Sector-specific constraints (from diagnostic analysis)
+    SECTOR_MAX_GROWTH: dict = {
+        "Financial Services": 0.10,  # Banks don't grow >10% sustainably
+        "Utilities": 0.06,  # Regulated, slow growth
+        "Communication Services": 0.08,  # Mature telecom
+        "Consumer Defensive": 0.08,  # Staples, stable
+        "Energy": 0.12,  # Cyclical but capped
+        "Real Estate": 0.08,  # REITs, income-focused
+        "Basic Materials": 0.12,  # Cyclical
+        "Industrials": 0.15,  # Moderate growth
+        "Healthcare": 0.20,  # Pharma/devices
+        "Consumer Cyclical": 0.20,  # Retail/auto
+        "Technology": 0.30,  # High growth allowed
+    }
+    
+    # Sector-specific terminal growth rates (more conservative)
+    SECTOR_TERMINAL_GROWTH: dict = {
+        "Financial Services": 0.020,  # GDP only
+        "Utilities": 0.020,  # GDP only
+        "Communication Services": 0.020,  # GDP only
+        "Consumer Defensive": 0.023,  # GDP + inflation hedge
+        "Energy": 0.025,  # GDP + commodity exposure
+        "Real Estate": 0.023,  # GDP + rent growth
+        "Basic Materials": 0.025,  # GDP + industrial growth
+        "Industrials": 0.025,  # GDP + modest premium
+        "Healthcare": 0.027,  # GDP + aging demographics
+        "Consumer Cyclical": 0.025,  # GDP + modest premium
+        "Technology": 0.028,  # GDP + secular growth
+    }
 
     def __init__(self, ticker: str, auto_fetch: bool = True):
         self.ticker = ticker.upper().strip()
@@ -326,6 +359,33 @@ class DCFEngine:
         term_pv = term_value / ((1 + wacc) ** years)
         terminal_info["terminal_value"] = term_value
         terminal_info["terminal_pv"] = term_pv
+        terminal_info["terminal_pv_before_cap"] = term_pv
+        
+        # CRITICAL FIX: Cap terminal value to prevent perpetuity dominance
+        # Diagnostic finding: 72% of stocks had terminal > 75% of EV
+        total_ev_before_cap = pv_explicit + term_pv
+        terminal_pct = term_pv / total_ev_before_cap if total_ev_before_cap > 0 else 0
+        
+        if terminal_pct > self.MAX_TERMINAL_VALUE_PCT:
+            # Calculate maximum allowed terminal value
+            max_term_pv = pv_explicit * self.MAX_TERMINAL_VALUE_PCT / (1 - self.MAX_TERMINAL_VALUE_PCT)
+            reduction_pct = (term_pv - max_term_pv) / term_pv * 100
+            
+            terminal_info["terminal_capped"] = True
+            terminal_info["terminal_pct_before_cap"] = terminal_pct
+            terminal_info["reduction_pct"] = reduction_pct
+            terminal_info["warning"] = (
+                f"Terminal value reduced from {terminal_pct*100:.1f}% to {self.MAX_TERMINAL_VALUE_PCT*100:.1f}% of EV. "
+                f"Original valuation too dependent on perpetuity assumptions."
+            )
+            
+            term_pv = max_term_pv
+            terminal_info["terminal_pv"] = term_pv
+            # Recalculate percentage after capping
+            terminal_info["terminal_pct"] = self.MAX_TERMINAL_VALUE_PCT
+        else:
+            terminal_info["terminal_capped"] = False
+            terminal_info["terminal_pct"] = terminal_pct
 
         return cash_flows, pv_explicit, term_pv, pv_explicit + term_pv, terminal_info
 
@@ -455,6 +515,52 @@ class DCFEngine:
             }
         }
 
+    def apply_sector_constraints(self, growth: float, sector: str | None) -> tuple[float, list[str]]:
+        """Apply sector-specific growth constraints.
+        
+        Based on diagnostic finding: Extreme valuations caused by unrealistic growth assumptions.
+        Banks don't grow 40%, utilities don't grow 20%.
+        
+        Args:
+            growth: Proposed growth rate
+            sector: Company sector
+            
+        Returns:
+            (constrained_growth, warnings)
+        """
+        warnings = []
+        
+        if not sector:
+            return growth, warnings
+        
+        # Get sector maximum
+        sector_max = self.SECTOR_MAX_GROWTH.get(sector, 0.30)  # Default 30%
+        
+        if growth > sector_max:
+            warnings.append(
+                f"Growth rate {growth*100:.1f}% exceeds {sector} sector maximum {sector_max*100:.1f}%. "
+                f"Capped to sector limit."
+            )
+            return sector_max, warnings
+        
+        return growth, warnings
+    
+    def get_sector_terminal_growth(self, sector: str | None) -> float:
+        """Get sector-specific terminal growth rate.
+        
+        Based on diagnostic finding: Need conservative terminal growth by sector.
+        
+        Args:
+            sector: Company sector
+            
+        Returns:
+            Terminal growth rate (decimal)
+        """
+        if not sector:
+            return 0.025  # Default GDP growth
+        
+        return self.SECTOR_TERMINAL_GROWTH.get(sector, 0.025)
+
     def clean_growth_rate(self, analyst_growth: float | None,
                          sector: str | None = None,
                          blend_weight: float | None = None) -> tuple[float, str]:
@@ -535,7 +641,12 @@ class DCFEngine:
                 f"Using {blended*100:.1f}%"
             )
 
-        # Case 5: Reasonable data - use as is
+        # Case 5: Reasonable data - apply sector constraints
+        constrained_growth, constraints = self.apply_sector_constraints(analyst_growth, sector)
+        
+        if constraints:
+            return constrained_growth, constraints[0]  # Return first warning as message
+        
         return analyst_growth, f"✓ Using analyst growth rate ({analyst_growth*100:.1f}%)"
 
     def get_sector_average_ev_sales(self, sector: str, max_peers: int = 10) -> float | None:
@@ -695,6 +806,91 @@ class DCFEngine:
             "relative_valuation": relative_metrics.to_dict(),
         }
 
+    def detect_valuation_conflict(self, dcf_upside: float, relative_signal: str, 
+                                  peg_ratio: float | None) -> dict:
+        """Detect conflicts between DCF and relative valuation.
+        
+        DIAGNOSTIC FIX: Check for conflicts BEFORE blending.
+        Old problem: 0% conflicts detected (they were being masked by blending).
+        New approach: Flag disagreements explicitly.
+        
+        Args:
+            dcf_upside: DCF upside percentage
+            relative_signal: Relative valuation signal (UNDERVALUED/FAIR/OVERVALUED)
+            peg_ratio: PEG ratio (if available)
+            
+        Returns:
+            Dict with conflict_status, warnings, and adjusted_conviction
+        """
+        warnings = []
+        
+        # Determine DCF signal
+        if dcf_upside > 15:
+            dcf_signal = "BULLISH"
+        elif dcf_upside < -10:
+            dcf_signal = "BEARISH"
+        else:
+            dcf_signal = "NEUTRAL"
+        
+        # Determine relative signal
+        if relative_signal == "UNDERVALUED":
+            rel_signal = "BULLISH"
+        elif relative_signal == "OVERVALUED":
+            rel_signal = "BEARISH"
+        else:
+            rel_signal = "NEUTRAL"
+        
+        # Check for major conflicts
+        major_conflict = False
+        if (dcf_signal == "BULLISH" and rel_signal == "BEARISH"):
+            major_conflict = True
+            warnings.append(
+                f"\u26a0\ufe0f  MAJOR CONFLICT: DCF shows +{dcf_upside:.1f}% upside but relative "
+                f"valuation shows {relative_signal} vs peers"
+            )
+        elif (dcf_signal == "BEARISH" and rel_signal == "BULLISH"):
+            major_conflict = True
+            warnings.append(
+                f"\u26a0\ufe0f  MAJOR CONFLICT: DCF shows {dcf_upside:.1f}% downside but relative "
+                f"valuation shows {relative_signal} vs peers"
+            )
+        
+        # Check PEG ratio warning
+        peg_warning = False
+        if peg_ratio and peg_ratio > 2.0 and dcf_signal == "BULLISH":
+            peg_warning = True
+            warnings.append(
+                f"\u26a0\ufe0f  HIGH PEG RATIO: {peg_ratio:.2f} suggests growth already priced in by market"
+            )
+        elif peg_ratio and peg_ratio > 1.5 and dcf_signal == "BULLISH":
+            warnings.append(
+                f"\u2139\ufe0f  Elevated PEG: {peg_ratio:.2f} - market expects strong growth"
+            )
+        
+        # Determine conflict status
+        if major_conflict:
+            conflict_status = "CONFLICTED"
+            recommendation = "DO NOT INVEST - Methods disagree on fundamental value"
+        elif peg_warning:
+            conflict_status = "CAUTION"
+            recommendation = "Exercise caution - growth expectations may be priced in"
+        elif dcf_signal == rel_signal and dcf_signal != "NEUTRAL":
+            conflict_status = "ALIGNED"
+            recommendation = "Methods agree on valuation direction"
+        else:
+            conflict_status = "NEUTRAL"
+            recommendation = "Mixed signals - deeper analysis recommended"
+        
+        return {
+            "conflict_status": conflict_status,
+            "dcf_signal": dcf_signal,
+            "relative_signal": rel_signal,
+            "major_conflict": major_conflict,
+            "peg_warning": peg_warning,
+            "warnings": warnings,
+            "recommendation": recommendation,
+        }
+
     def get_intrinsic_value(self, growth: float | None = None, term_growth: float = 0.025,
                             wacc: float | None = None, years: int = 5,
                             terminal_method: str | None = None,
@@ -785,6 +981,13 @@ class DCFEngine:
         else:
             blended_value = value_per_share
             blended_upside = upside
+        
+        # DIAGNOSTIC FIX: Detect conflicts BEFORE presenting results
+        conflict_analysis = self.detect_valuation_conflict(
+            dcf_upside=upside,
+            relative_signal=relative_metrics.overall_signal,
+            peg_ratio=data.peg_ratio
+        )
 
         return {
             "ticker": self.ticker,
@@ -811,6 +1014,8 @@ class DCFEngine:
                 "dcf_weight": 0.60,
                 "relative_weight": 0.40,
             },
+            # NEW: Conflict detection
+            "valuation_conflict": conflict_analysis,
         }
 
     def calculate_implied_growth(self, target_price: float | None = None,
@@ -954,17 +1159,25 @@ class DCFEngine:
     def simulate_value(self, iterations: int = 5000,
                       growth: float | None = None,
                       wacc: float | None = None,
-                      term_growth: float = 0.025,
+                      term_growth: float | None = None,
                       years: int = 5,
                       terminal_method: str | None = None,
-                      exit_multiple: float | None = None) -> dict:
-        """Monte Carlo simulation for probabilistic valuation.
+                      exit_multiple: float | None = None,
+                      mode: str = 'default') -> dict:
+        """Monte Carlo simulation with scenario-based sampling.
 
-        Simulates multiple scenarios with stochastic inputs to generate
-        a distribution of possible values. Works for both DCF and EV/Sales valuations.
+        DIAGNOSTIC FIX: Replaces normal distribution sampling with realistic scenario-based approach.
+        Old problem: 44% of stocks showed >95% confidence (unrealistic).
+        New approach: Bear/Base/Bull scenarios with realistic probabilities.
+
+        Iteration modes (based on convergence analysis):
+        - fast: 2000 iterations - for quick screening
+        - default: 5000 iterations - standard analysis  
+        - detailed: 10000 iterations - stakeholder reports
 
         Args:
-            iterations: Number of Monte Carlo runs (default 5000, max 10000 for high-precision)
+            iterations: Number of Monte Carlo runs (or use mode)
+            mode: 'fast', 'default', or 'detailed' (overrides iterations)
             growth, wacc, term_growth, years: Base case parameters (DCF only)
             terminal_method: Terminal value method (DCF only)
             exit_multiple: Exit multiple for terminal value (DCF only)
@@ -972,6 +1185,15 @@ class DCFEngine:
         Returns:
             dict with median, VaR, upside, probability metrics
         """
+        # Map mode to iterations
+        iteration_modes = {
+            'fast': 2000,
+            'default': 5000,
+            'detailed': 10000
+        }
+        if mode in iteration_modes:
+            iterations = iteration_modes[mode]
+        
         if not self.is_ready:
             return {"error": f"No data for {self.ticker}: {self._last_error}"}
 
@@ -984,6 +1206,12 @@ class DCFEngine:
         # Set base parameters
         if growth is None:
             growth = data.analyst_growth or 0.05
+            # Apply sector constraints
+            growth, _ = self.apply_sector_constraints(growth, data.sector)
+        
+        if term_growth is None:
+            term_growth = self.get_sector_terminal_growth(data.sector)
+            
         if wacc is None:
             wacc = self.calculate_wacc(data.beta)
 
@@ -995,17 +1223,55 @@ class DCFEngine:
         if exit_multiple is None and terminal_method == "exit_multiple":
             exit_multiple = self.get_sector_exit_multiple(data.sector)
 
-        # Run Monte Carlo simulations
+        # SCENARIO-BASED MONTE CARLO (Diagnostic fix)
+        # Define three scenarios instead of single normal distribution
+        scenarios = {
+            'bear': {
+                'probability': 0.20,
+                'growth_multiplier': 0.50,  # Half of analyst estimate
+                'terminal_growth': term_growth * 0.6,  # Conservative terminal
+                'description': 'Downside scenario: growth slowdown, margin pressure'
+            },
+            'base': {
+                'probability': 0.60,
+                'growth_multiplier': 0.80,  # 80% of analyst estimate
+                'terminal_growth': term_growth,  # Normal terminal
+                'description': 'Base case: conservative growth assumptions'
+            },
+            'bull': {
+                'probability': 0.20,
+                'growth_multiplier': 1.20,  # 120% of analyst estimate
+                'terminal_growth': term_growth * 1.2,  # Optimistic terminal
+                'description': 'Upside scenario: growth acceleration, margin expansion'
+            }
+        }
+        
+        # Run Monte Carlo simulations with scenario sampling
         values = []
+        scenario_samples = {'bear': 0, 'base': 0, 'bull': 0}
 
         for _ in range(iterations):
-            # Stochastic parameters
-            sim_growth = np.random.normal(loc=growth, scale=0.05)
+            # Sample scenario based on probabilities
+            scenario_name = np.random.choice(
+                list(scenarios.keys()),
+                p=[s['probability'] for s in scenarios.values()]
+            )
+            scenario_samples[scenario_name] += 1
+            scenario = scenarios[scenario_name]
+            
+            # Calculate scenario-specific growth with noise
+            scenario_growth = growth * scenario['growth_multiplier']
+            # Add noise: tighter distribution within each scenario (±3% instead of ±5%)
+            sim_growth = np.random.normal(loc=scenario_growth, scale=0.03)
+            sim_term_growth = scenario['terminal_growth']
+            
+            # WACC variation (±1%)
             sim_wacc = np.random.normal(loc=wacc, scale=0.01)
 
-            # Bound growth to reasonable range
-            sim_growth = np.clip(sim_growth, -0.50, 1.00)
-            sim_wacc = max(sim_wacc, 0.01)  # Prevent negative WACC
+            # Bound to reasonable ranges
+            sim_growth = np.clip(sim_growth, -0.30, 0.50)  # Tighter bounds
+            sim_term_growth = np.clip(sim_term_growth, 0.015, 0.035)
+            sim_wacc = max(sim_wacc, 0.03)  # Minimum 3% WACC
 
             # Stochastic exit multiple if using exit multiple method
             if terminal_method == "exit_multiple":
@@ -1015,7 +1281,7 @@ class DCFEngine:
 
             try:
                 _, _, _, ev, _ = self.calculate_dcf(
-                    data.fcf, sim_growth, term_growth, sim_wacc, years,
+                    data.fcf, sim_growth, sim_term_growth, sim_wacc, years,
                     terminal_method, sim_exit_mult
                 )
                 value_per_share = ev / data.shares if data.shares > 0 else 0
@@ -1040,32 +1306,41 @@ class DCFEngine:
         prob_undervalued = (values > data.current_price).mean() * 100
         prob_overvalued = (values < data.current_price).mean() * 100
 
-        # Assessment
-        if prob_undervalued > 75:
-            assessment = "HIGH CONVICTION BUY (>75% probability undervalued)"
-        elif prob_undervalued > 60:
-            assessment = "MODERATE BUY (60-75% probability undervalued)"
-        elif prob_undervalued > 40:
-            assessment = "NEUTRAL (40-60% mixed signals)"
-        elif prob_undervalued > 25:
-            assessment = "MODERATE SELL (25-40% probability undervalued)"
+        # Assessment (more conservative thresholds post-diagnostic)
+        if prob_undervalued > 80:
+            assessment = "HIGH CONVICTION BUY (>80% probability undervalued)"
+        elif prob_undervalued > 65:
+            assessment = "MODERATE BUY (65-80% probability undervalued)"
+        elif prob_undervalued > 35:
+            assessment = "NEUTRAL (35-65% mixed signals)"
+        elif prob_undervalued > 20:
+            assessment = "MODERATE SELL (20-35% probability undervalued)"
         else:
-            assessment = "HIGH CONVICTION SELL (<25% probability undervalued)"
+            assessment = "HIGH CONVICTION SELL (<20% probability undervalued)"
 
         return {
             "ticker": self.ticker,
             "iterations": len(values),
+            "iteration_mode": mode if mode in iteration_modes else 'custom',
             "current_price": data.current_price,
             "median_value": median_value,
             "mean_value": mean_value,
             "std_value": std_value,
             "var_95": var_95,  # Downside risk
             "upside_95": upside_95,  # Upside potential
+            "probability": prob_undervalued,  # Keep this key for backward compatibility
             "prob_undervalued": prob_undervalued,
             "prob_overvalued": prob_overvalued,
             "assessment": assessment,
+            "scenario_sampling": {
+                "bear_samples": scenario_samples['bear'],
+                "base_samples": scenario_samples['base'],
+                "bull_samples": scenario_samples['bull'],
+                "scenarios": {name: s['description'] for name, s in scenarios.items()}
+            },
             "base_params": {
                 "growth": growth,
+                "term_growth": term_growth,
                 "wacc": wacc,
                 "terminal_method": terminal_method,
             },
@@ -1257,9 +1532,9 @@ class DCFEngine:
         """Generate stress test heatmap: valuation sensitivity to growth/WACC combinations.
 
         Args:
-            growth_range: (min_growth, max_growth) tuple (e.g., -20% to +30%)
-            wacc_range: (min_wacc, max_wacc) tuple (e.g., 6% to 18%)
-            grid_size: Number of points in each dimension (7x7 = 49 scenarios)
+            growth_range: (min_growth, max_growth) tuple (e.g., from -0.20 to +0.30)
+            wacc_range: (min_wacc, max_wacc) tuple (e.g., from 0.06 to 0.18)
+            grid_size: Number of points in each dimension (7 by 7 = 49 scenarios)
             years: Forecast period
 
         Returns:
@@ -1337,7 +1612,7 @@ class DCFEngine:
         """
         Fetch company data for multiple tickers in parallel.
         
-        Significantly faster than sequential fetching (5-10x speedup).
+        Significantly faster than sequential fetching (5 to 10 times speedup).
         Uses ThreadPoolExecutor to fetch multiple stocks concurrently.
         
         Args:
@@ -1393,7 +1668,7 @@ class DCFEngine:
             wacc: Override WACC (decimal)
             years: Forecast years
             skip_negative_fcf: Skip stocks with negative FCF
-            use_parallel: Use parallel fetching (default: True, 5-10x faster)
+            use_parallel: Use parallel fetching (default: True, 5 to 10 times faster)
             
         Returns:
             Dict with results, ranking, errors, skipped, summary

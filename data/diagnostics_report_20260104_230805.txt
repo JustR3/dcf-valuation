@@ -1,0 +1,126 @@
+================================================================================
+DCF SYSTEM DIAGNOSTIC REPORT - CRITICAL FINDINGS
+================================================================================
+
+Total Stocks Analyzed: 18
+Failed to Analyze: 2
+
+FINDING 1: TERMINAL VALUE DOMINANCE
+--------------------------------------------------------------------------------
+Average Terminal Value: 64.3% of EV
+Stocks with Terminal > 75%: 0
+Stocks with Terminal > 80%: 0
+
+FINDING 2: DCF VS RELATIVE VALUATION CONFLICTS
+--------------------------------------------------------------------------------
+Conflict Rate: 0.0%
+Total Conflicts: 0
+
+FINDING 3: MONTE CARLO OVERCONFIDENCE
+--------------------------------------------------------------------------------
+Average Probability: 25.6%
+Stocks with >95% Confidence: 4
+Stocks with >90% Confidence: 4
+Average Confidence Interval Width: 63.2%
+Stocks with <20% Interval: 5
+
+⚠️  CRITICAL: Multiple stocks showing >95% confidence - unrealistic!
+    DCF inputs have 15-20% inherent uncertainty.
+    Monte Carlo is sampling around bad assumptions (GIGO).
+
+FINDING 4: EXTREME VALUATIONS
+--------------------------------------------------------------------------------
+Stocks with >100% Absolute Upside: 3
+
+Extreme Valuations:
+  - F: +446.2% ($13.34 → $72.86)
+  - BAC: +499.7% ($55.95 → $335.51)
+  - VZ: +100.5% ($40.52 → $81.26)
+
+⚠️  WARNING: Extreme valuations suggest unrealistic assumptions.
+    Market is unlikely to be THIS wrong about well-followed stocks.
+
+TOP 10 WORST OFFENDERS (Most Warnings)
+--------------------------------------------------------------------------------
+
+1. F - Cyclical Auto - Ford
+   Warnings: 3
+   DCF Upside: +446.2%
+   Terminal Value: 65.0%
+   MC Probability: 100.0%
+   ⚠️  Large blending adjustment: DCF +446.2% → Blended +409.0%
+   ⚠️  Monte Carlo overconfident: 100.0% probability
+   ⚠️  Extreme valuation: +446.2% upside
+
+2. BAC - Financial - Bank of America
+   Warnings: 3
+   DCF Upside: +499.7%
+   Terminal Value: 65.0%
+   MC Probability: 100.0%
+   ⚠️  Large blending adjustment: DCF +499.7% → Blended +327.7%
+   ⚠️  Monte Carlo overconfident: 100.0% probability
+   ⚠️  Extreme valuation: +499.7% upside
+
+3. VZ - Defensive Telecom - Verizon
+   Warnings: 3
+   DCF Upside: +100.5%
+   Terminal Value: 65.0%
+   MC Probability: 100.0%
+   ⚠️  Monte Carlo overconfident: 100.0% probability
+   ⚠️  High PEG ratio: 3.62 (growth priced in)
+   ⚠️  Extreme valuation: +100.5% upside
+
+4. NVDA - High-growth Tech - NVIDIA
+   Warnings: 2
+   DCF Upside: -55.6%
+   Terminal Value: 65.0%
+   MC Probability: 0.0%
+   ⚠️  Monte Carlo too narrow: 18.7% confidence interval
+   ⚠️  Very high analyst growth: 87.3%
+
+5. INTC - Turnaround - Intel
+   Warnings: 2
+   DCF Upside: -96.9%
+   Terminal Value: 65.0%
+   MC Probability: 0.0%
+   ⚠️  Large blending adjustment: DCF -96.9% → Blended -5.9%
+   ⚠️  Monte Carlo too narrow: 1.0% confidence interval
+
+6. KO - Mature Consumer - Coca-Cola
+   Warnings: 1
+   DCF Upside: -14.6%
+   Terminal Value: 65.0%
+   MC Probability: 2.7%
+   ⚠️  High PEG ratio: 3.23 (growth priced in)
+
+7. PG - Mature Consumer - Procter & Gamble
+   Warnings: 1
+   DCF Upside: -27.9%
+   Terminal Value: 65.0%
+   MC Probability: 0.0%
+   ⚠️  High PEG ratio: 2.64 (growth priced in)
+
+8. NOW - High-growth SaaS - ServiceNow
+   Warnings: 1
+   DCF Upside: -84.1%
+   Terminal Value: 65.0%
+   MC Probability: 0.0%
+   ⚠️  Monte Carlo too narrow: 4.6% confidence interval
+
+9. PLTR - High-growth AI - Palantir
+   Warnings: 1
+   DCF Upside: -94.9%
+   Terminal Value: 65.0%
+   MC Probability: 0.0%
+   ⚠️  Monte Carlo too narrow: 1.4% confidence interval
+
+10. MSFT - Mega-cap Tech - Microsoft
+   Warnings: 1
+   DCF Upside: -39.7%
+   Terminal Value: 65.0%
+   MC Probability: 0.0%
+   ⚠️  Very high analyst growth: 33.4%
+
+================================================================================
+END OF DIAGNOSTIC REPORT
+================================================================================
