@@ -37,8 +37,8 @@ env/
 .DS_Store
 Thumbs.db
 
-# Data and cache
-data/cache/
+# Data and cache (entire folder - users regenerate via download scripts)
+data/
 *.csv
 *.xlsx
 benchmark_run.log
