@@ -167,7 +167,24 @@ class DCFEngine:
                 self._last_error = f"No FCF data for {self.ticker}"
                 return False
 
-            fcf_annual = cash_flow.loc["Free Cash Flow"].iloc[0] * 4 / 1e6
+            # Extract FCF and ensure it's a float (not dict/Series)
+            fcf_value = cash_flow.loc["Free Cash Flow"].iloc[0]
+            
+            # Handle various pandas types
+            if isinstance(fcf_value, (dict, pd.Series)):
+                # If it's a dict or Series, try to extract the first value
+                if isinstance(fcf_value, dict):
+                    fcf_value = next(iter(fcf_value.values()), 0)
+                elif isinstance(fcf_value, pd.Series):
+                    fcf_value = fcf_value.iloc[0] if len(fcf_value) > 0 else 0
+            
+            # Convert to float
+            try:
+                fcf_annual = float(fcf_value) * 4 / 1e6  # Quarterly to annual, millions
+            except (TypeError, ValueError):
+                self._last_error = f"Invalid FCF data type for {self.ticker}: {type(fcf_value)}"
+                return False
+            
             shares = info.get("sharesOutstanding", 0) / 1e6
 
             if shares == 0:
