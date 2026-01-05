@@ -1,4 +1,4 @@
-"""External data source integrations (FRED, Shiller, Damodaran)."""
+"""External data source integrations (FRED, Shiller, Damodaran, XBRL)."""
 
 from src.external.fred import FredConnector, get_fred_connector
 from src.external.shiller import (
@@ -12,6 +12,7 @@ from src.external.damodaran import (
     get_damodaran_loader,
     SectorPriors,
 )
+from src.external.xbrl_parser import XBRLDirectParser
 
 __all__ = [
     # FRED
@@ -26,4 +27,6 @@ __all__ = [
     "DamodaranLoader",
     "get_damodaran_loader",
     "SectorPriors",
+    # XBRL
+    "XBRLDirectParser",
 ]
