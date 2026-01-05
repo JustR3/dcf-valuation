@@ -16,16 +16,16 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 import yfinance as yf
 from tqdm import tqdm
 
 from src.backtest.config import backtest_config
+from src.external.xbrl_parser import XBRLDirectParser
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -47,10 +47,13 @@ class HistoricalDataLoader:
         self.metadata_file = self.config.PRICES_DIR / "index.json"
         self._load_metadata()
 
+        # Initialize XBRL parser for financial data
+        self.xbrl_parser = XBRLDirectParser()
+
     def _load_metadata(self) -> None:
         """Load metadata about cached files."""
         if self.metadata_file.exists():
-            with open(self.metadata_file, "r") as f:
+            with open(self.metadata_file) as f:
                 self.metadata = json.load(f)
         else:
             self.metadata = {}
@@ -69,7 +72,7 @@ class HistoricalDataLoader:
         ticker : str
             Stock ticker symbol
         data_type : str
-            'prices' or 'financials'
+            'prices', 'financials', or 'financials_xbrl'
 
         Returns
         -------
@@ -80,6 +83,8 @@ class HistoricalDataLoader:
             return self.config.PRICES_DIR / f"{ticker}_daily.parquet"
         elif data_type == "financials":
             return self.config.FINANCIALS_DIR / f"{ticker}_quarterly.parquet"
+        elif data_type == "financials_xbrl":
+            return self.config.FINANCIALS_DIR / f"{ticker}_annual_xbrl.parquet"
         else:
             raise ValueError(f"Unknown data_type: {data_type}")
 
@@ -250,10 +255,10 @@ class HistoricalDataLoader:
 
     def download_financials(self, tickers: list[str]) -> dict[str, pd.DataFrame]:
         """
-        Download historical quarterly financial data.
+        Download historical annual financial data using SEC XBRL.
 
-        Note: yfinance provides limited historical financial statements
-        (~10 years typically). Data is cached per ticker.
+        Uses SEC Company Facts API to get 10-15+ years of financial data,
+        significantly more than yfinance's ~6 quarters.
 
         Parameters
         ----------
@@ -265,16 +270,16 @@ class HistoricalDataLoader:
         dict[str, pd.DataFrame]
             Dictionary mapping ticker to financials DataFrame
         """
-        logger.info(f"Downloading financial data for {len(tickers)} tickers")
+        logger.info(f"Downloading financial data for {len(tickers)} tickers using SEC XBRL")
 
         results = {}
 
         for ticker in tqdm(tickers, desc="Downloading financials"):
             # Check cache
-            if self._is_cached(ticker, "financials"):
+            if self._is_cached(ticker, "financials_xbrl"):
                 logger.debug(f"Loading {ticker} financials from cache")
                 try:
-                    df = pd.read_parquet(self._get_cache_path(ticker, "financials"))
+                    df = pd.read_parquet(self._get_cache_path(ticker, "financials_xbrl"))
                     # Ensure index is datetime (not string)
                     if not isinstance(df.index, pd.DatetimeIndex):
                         df.index = pd.to_datetime(df.index)
@@ -286,68 +291,55 @@ class HistoricalDataLoader:
             # Download with retry logic
             for attempt in range(self.config.MAX_RETRIES):
                 try:
-                    stock = yf.Ticker(ticker)
+                    # Use XBRL parser to get annual 10-K data
+                    df = self.xbrl_parser.get_financials(ticker, form_type="10-K")
 
-                    # Get quarterly financial statements
-                    income_stmt = stock.quarterly_income_stmt
-                    balance_sheet = stock.quarterly_balance_sheet
-                    cash_flow = stock.quarterly_cashflow
-
-                    if income_stmt.empty and balance_sheet.empty and cash_flow.empty:
+                    if df.empty:
                         logger.warning(f"No financial data available for {ticker}")
                         break
 
-                    # Combine key metrics into single DataFrame
-                    # yfinance structure: rows=metrics, columns=dates
-                    # We want: rows=dates, columns=metrics
-                    
-                    # Extract key metrics (safely handle missing data)
-                    metrics = {
-                        "revenue": ("Total Revenue", income_stmt),
-                        "operating_income": ("Operating Income", income_stmt),
-                        "net_income": ("Net Income", income_stmt),
-                        "fcf": ("Free Cash Flow", cash_flow),
-                        "total_debt": ("Total Debt", balance_sheet),
-                        "cash": ("Cash And Cash Equivalents", balance_sheet),
-                        "shares_outstanding": ("Share Issued", balance_sheet),
+                    # Rename columns to match expected format
+                    # XBRL columns: revenue, net_income, operating_cash_flow, capex,
+                    #               total_debt, cash, shares_outstanding, free_cash_flow
+                    # Expected: revenue, operating_income, net_income, fcf, total_debt,
+                    #           cash, shares_outstanding
+
+                    # Map XBRL columns to expected columns
+                    column_mapping = {
+                        "free_cash_flow": "fcf",
+                        # Keep other columns as-is: revenue, net_income, total_debt, cash, shares_outstanding
                     }
 
-                    # Build dict of series for each metric
-                    data_dict = {}
-                    for metric_name, (row_name, source_df) in metrics.items():
-                        if row_name in source_df.index:
-                            # Get the series (dates as index, values as data)
-                            data_dict[metric_name] = source_df.loc[row_name]
+                    df = df.rename(columns=column_mapping)
 
-                    if not data_dict:
-                        logger.warning(f"No extractable metrics for {ticker}")
-                        break
+                    # Filter by date range if specified in config
+                    if hasattr(self.config, "START_DATE") and self.config.START_DATE:
+                        df = df[df.index >= pd.to_datetime(self.config.START_DATE)]
+                    if hasattr(self.config, "END_DATE") and self.config.END_DATE:
+                        df = df[df.index <= pd.to_datetime(self.config.END_DATE)]
 
-                    # Create DataFrame from dict (dates will be index)
-                    combined = pd.DataFrame(data_dict)
-                    combined.index.name = "date"
+                    # Ensure index is datetime and sorted
+                    df.index = pd.to_datetime(df.index)
+                    df = df.sort_index(ascending=True)
 
-                    # Ensure index is datetime
-                    if not isinstance(combined.index, pd.DatetimeIndex):
-                        combined.index = pd.to_datetime(combined.index)
-
-                    # Sort by date (descending - newest first from yfinance)
-                    combined = combined.sort_index(ascending=True)
-
-                    # Save to cache
-                    cache_path = self._get_cache_path(ticker, "financials")
-                    combined.to_parquet(cache_path)
+                    # Save to cache with xbrl identifier
+                    cache_path = self._get_cache_path(ticker, "financials_xbrl")
+                    df.to_parquet(cache_path)
 
                     # Update metadata
-                    self.metadata[f"{ticker}_financials"] = {
+                    self.metadata[f"{ticker}_financials_xbrl"] = {
                         "last_update": datetime.now().isoformat(),
-                        "earliest_date": str(combined.index.min().date() if hasattr(combined.index.min(), 'date') else combined.index.min()),
-                        "latest_date": str(combined.index.max().date() if hasattr(combined.index.max(), 'date') else combined.index.max()),
-                        "num_periods": len(combined),
+                        "earliest_date": str(df.index.min().date() if hasattr(df.index.min(), 'date') else df.index.min()),
+                        "latest_date": str(df.index.max().date() if hasattr(df.index.max(), 'date') else df.index.max()),
+                        "num_periods": len(df),
+                        "source": "xbrl",
                     }
 
-                    results[ticker] = combined
-                    logger.debug(f"Downloaded and cached {ticker} financials: {len(combined)} periods")
+                    results[ticker] = df
+                    logger.debug(
+                        f"Downloaded and cached {ticker} financials: {len(df)} periods "
+                        f"({df.index.min().year}-{df.index.max().year})"
+                    )
 
                     break  # Success
 
@@ -355,19 +347,26 @@ class HistoricalDataLoader:
                     if attempt < self.config.MAX_RETRIES - 1:
                         wait_time = self.config.RETRY_DELAY * (2**attempt)
                         logger.warning(
-                            f"Failed to download {ticker} financials (attempt {attempt + 1}): {e}. Retrying in {wait_time}s"
+                            f"Failed to download {ticker} financials (attempt {attempt + 1}): {e}. "
+                            f"Retrying in {wait_time}s"
                         )
                         time.sleep(wait_time)
                     else:
-                        logger.error(f"Failed to download {ticker} financials after {self.config.MAX_RETRIES} attempts: {e}")
+                        logger.error(
+                            f"Failed to download {ticker} financials after "
+                            f"{self.config.MAX_RETRIES} attempts: {e}"
+                        )
 
-            # Rate limiting
+            # Rate limiting (SEC requests)
             time.sleep(self.config.RATE_LIMIT_DELAY)
 
         # Save metadata
         self._save_metadata()
 
-        logger.info(f"Successfully downloaded financials for {len(results)} / {len(tickers)} tickers")
+        logger.info(
+            f"Successfully downloaded financials for {len(results)} / {len(tickers)} tickers"
+        )
+
         return results
 
     def get_market_data(self, start_date: datetime | None = None, end_date: datetime | None = None) -> pd.DataFrame:
@@ -400,7 +399,7 @@ class HistoricalDataLoader:
 
         # Download benchmark (SPY or similar)
         benchmark = yf.download(self.config.BENCHMARK_TICKER, start=start_date, end=end_date, progress=False)
-        
+
         # Handle multi-level columns from yfinance
         if isinstance(benchmark.columns, pd.MultiIndex):
             benchmark.columns = benchmark.columns.get_level_values(0)
