@@ -22,6 +22,7 @@ dependencies = [
     "openpyxl>=3.1.0",
     "xlrd>=2.0.1",
     "pydantic>=2.12.5",
+    "tqdm>=4.66.0",
 ]
 
 [project.optional-dependencies]
