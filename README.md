@@ -93,7 +93,7 @@ The `data/` folder (545MB, 681 files) is **excluded from git** to keep the repos
 
 ```bash
 # Download all historical data (~30 seconds for 48 stocks)
-uv run python download_full_history.py
+uv run python scripts/download_full_history.py
 
 # Verify data download
 ls -lh data/cache/  # Should see 48+ JSON files
@@ -103,17 +103,17 @@ ls -lh data/cache/  # Should see 48+ JSON files
 
 ```bash
 # Quick pilot backtest (5 stocks, 5 years, ~2 minutes)
-uv run python run_pilot_backtest.py
+uv run python scripts/run_pilot_backtest.py
 
 # Full backtest (48 stocks, 20 years, ~15 minutes)
-uv run python run_full_backtest.py
+uv run python scripts/run_full_backtest.py
 ```
 
 ### Data Download Scripts
 
-- **`download_full_history.py`**: Downloads complete dataset (48 stocks, 20 years)
-- **`download_pilot_data.py`**: Downloads pilot subset (5 stocks, 5 years)  
-- **`estimate_data_download.py`**: Estimates download time and coverage
+- **`scripts/download_full_history.py`**: Downloads complete dataset (48 stocks, 20 years)
+- **`scripts/download_pilot_data.py`**: Downloads pilot subset (5 stocks, 5 years)  
+- **`scripts/estimate_data_download.py`**: Estimates download time and coverage
 
 **Why data/ is excluded:**
 - Large size (545MB) slows cloning and increases repo size
