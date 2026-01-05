@@ -19,16 +19,16 @@ class BacktestConfig:
     RESULTS_DIR: Path = Path("data/backtest/results")
 
     # Time Periods
-    START_DATE: datetime = datetime(2010, 1, 1)  # Post-financial crisis
+    START_DATE: datetime = datetime(2006, 1, 1)  # Maximum history (20 years)
     END_DATE: datetime = datetime(2025, 12, 31)  # Current
-    PILOT_START: datetime = datetime(2024, 1, 1)  # Pilot backtest start (recent data only from yfinance)
-    PILOT_END: datetime = datetime(2024, 6, 30)  # Pilot backtest end (need forward data)
+    PILOT_START: datetime = datetime(2024, 1, 1)  # Pilot backtest start
+    PILOT_END: datetime = datetime(2024, 6, 30)  # Pilot backtest end
 
     # Forward Return Horizons (in trading days)
     FORWARD_PERIODS: dict[str, int] = None  # Will be set in __post_init__
 
     # Rebalancing
-    REBALANCE_FREQUENCY: str = "quarterly"  # quarterly, monthly, annual
+    REBALANCE_FREQUENCY: str = "Y"  # Y=annual, Q=quarterly, M=monthly (annual for 20-year backtest)
     QUARTERS: list[tuple[int, int]] = None  # Will be set in __post_init__
 
     # Data Collection
@@ -79,13 +79,15 @@ class BacktestConfig:
             "JNJ",  # Healthcare
         ]
 
-        # Full backtest stocks (50+ stocks across all sectors)
-        from src.config import SECTOR_PEERS
-
-        self.FULL_TEST_TICKERS = []
-        for sector, tickers in SECTOR_PEERS.items():
-            # Take first 5 tickers from each sector (or fewer if not available)
-            self.FULL_TEST_TICKERS.extend(tickers[:5])
+        # Full backtest stocks (48 successfully downloaded with 20-year history)
+        self.FULL_TEST_TICKERS = [
+            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA",
+            "BRK-B", "LLY", "V", "UNH", "XOM", "WMT", "JPM", "MA",
+            "JNJ", "PG", "HD", "COST", "ABBV", "CVX", "MRK", "KO",
+            "PEP", "AVGO", "TMO", "CSCO", "MCD", "ACN", "ABT", "LIN",
+            "ADBE", "TXN", "NKE", "AMD", "DHR", "PM", "COP", "QCOM",
+            "INTU", "NEE", "UNP", "AMGN", "HON", "ORCL", "BMY", "CMCSA", "D"
+        ]
 
         # Ensure directories exist
         for directory in [
