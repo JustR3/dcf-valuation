@@ -159,7 +159,7 @@ SECTOR_PEERS = {
         "MMM", "DE", "FDX", "NSC", "EMR", "ITW", "CSX"
     ],
     "Financial Services": [
-        "BRK.B", "JPM", "V", "MA", "BAC", "WFC", "MS", "GS",
+        "BRK-B", "JPM", "V", "MA", "BAC", "WFC", "MS", "GS",
         "C", "BLK", "SPGI", "AXP", "SCHW", "CB", "PGR"
     ],
     "Energy": [
