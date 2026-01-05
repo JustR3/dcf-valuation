@@ -11,6 +11,18 @@ Modules:
 - config: Backtest configuration and parameters
 """
 
-from src.backtest.config import BacktestConfig
+from src.backtest.analysis import BacktestAnalyzer, PerformanceMetrics
+from src.backtest.config import BacktestConfig, backtest_config
+from src.backtest.data_loader import HistoricalDataLoader
+from src.backtest.engine import BacktestResults, BacktestSignal, WalkForwardBacktest
 
-__all__ = ["BacktestConfig"]
+__all__ = [
+    "BacktestConfig",
+    "backtest_config",
+    "HistoricalDataLoader",
+    "WalkForwardBacktest",
+    "BacktestSignal",
+    "BacktestResults",
+    "BacktestAnalyzer",
+    "PerformanceMetrics",
+]

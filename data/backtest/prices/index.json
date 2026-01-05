@@ -30,33 +30,33 @@
     "num_records": 1509
   },
   "AAPL_financials": {
-    "last_update": "2026-01-05T22:12:35.660230",
-    "earliest_date": "cash",
-    "latest_date": "total_debt",
-    "num_periods": 7
+    "last_update": "2026-01-05T22:18:47.904324",
+    "earliest_date": "2024-06-30",
+    "latest_date": "2025-09-30",
+    "num_periods": 6
   },
   "JPM_financials": {
-    "last_update": "2026-01-05T22:12:37.094111",
-    "earliest_date": "cash",
-    "latest_date": "total_debt",
+    "last_update": "2026-01-05T22:18:49.349041",
+    "earliest_date": "2024-06-30",
+    "latest_date": "2025-09-30",
     "num_periods": 6
   },
   "XOM_financials": {
-    "last_update": "2026-01-05T22:12:38.592604",
-    "earliest_date": "cash",
-    "latest_date": "total_debt",
-    "num_periods": 7
+    "last_update": "2026-01-05T22:18:50.816075",
+    "earliest_date": "2024-06-30",
+    "latest_date": "2025-09-30",
+    "num_periods": 6
   },
   "WMT_financials": {
-    "last_update": "2026-01-05T22:12:40.306142",
-    "earliest_date": "cash",
-    "latest_date": "total_debt",
+    "last_update": "2026-01-05T22:18:52.278941",
+    "earliest_date": "2024-04-30",
+    "latest_date": "2025-10-31",
     "num_periods": 7
   },
   "JNJ_financials": {
-    "last_update": "2026-01-05T22:12:41.769725",
-    "earliest_date": "cash",
-    "latest_date": "total_debt",
-    "num_periods": 7
+    "last_update": "2026-01-05T22:18:53.786543",
+    "earliest_date": "2024-06-30",
+    "latest_date": "2025-09-30",
+    "num_periods": 6
   }
 }

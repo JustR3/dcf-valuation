@@ -275,6 +275,9 @@ class HistoricalDataLoader:
                 logger.debug(f"Loading {ticker} financials from cache")
                 try:
                     df = pd.read_parquet(self._get_cache_path(ticker, "financials"))
+                    # Ensure index is datetime (not string)
+                    if not isinstance(df.index, pd.DatetimeIndex):
+                        df.index = pd.to_datetime(df.index)
                     results[ticker] = df
                     continue
                 except Exception as e:
@@ -295,9 +298,9 @@ class HistoricalDataLoader:
                         break
 
                     # Combine key metrics into single DataFrame
-                    # Columns are dates, rows are metrics - need to transpose
-                    combined = pd.DataFrame()
-
+                    # yfinance structure: rows=metrics, columns=dates
+                    # We want: rows=dates, columns=metrics
+                    
                     # Extract key metrics (safely handle missing data)
                     metrics = {
                         "revenue": ("Total Revenue", income_stmt),
@@ -309,20 +312,27 @@ class HistoricalDataLoader:
                         "shares_outstanding": ("Share Issued", balance_sheet),
                     }
 
+                    # Build dict of series for each metric
+                    data_dict = {}
                     for metric_name, (row_name, source_df) in metrics.items():
                         if row_name in source_df.index:
-                            combined[metric_name] = source_df.loc[row_name]
+                            # Get the series (dates as index, values as data)
+                            data_dict[metric_name] = source_df.loc[row_name]
 
-                    if combined.empty:
+                    if not data_dict:
                         logger.warning(f"No extractable metrics for {ticker}")
                         break
 
-                    # Transpose so dates are index
-                    combined = combined.T
+                    # Create DataFrame from dict (dates will be index)
+                    combined = pd.DataFrame(data_dict)
                     combined.index.name = "date"
 
-                    # Sort by date
-                    combined = combined.sort_index()
+                    # Ensure index is datetime
+                    if not isinstance(combined.index, pd.DatetimeIndex):
+                        combined.index = pd.to_datetime(combined.index)
+
+                    # Sort by date (descending - newest first from yfinance)
+                    combined = combined.sort_index(ascending=True)
 
                     # Save to cache
                     cache_path = self._get_cache_path(ticker, "financials")

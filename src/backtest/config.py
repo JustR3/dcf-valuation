@@ -21,8 +21,8 @@ class BacktestConfig:
     # Time Periods
     START_DATE: datetime = datetime(2010, 1, 1)  # Post-financial crisis
     END_DATE: datetime = datetime(2025, 12, 31)  # Current
-    PILOT_START: datetime = datetime(2019, 1, 1)  # Pilot backtest start
-    PILOT_END: datetime = datetime(2024, 12, 31)  # Pilot backtest end
+    PILOT_START: datetime = datetime(2024, 1, 1)  # Pilot backtest start (recent data only from yfinance)
+    PILOT_END: datetime = datetime(2024, 6, 30)  # Pilot backtest end (need forward data)
 
     # Forward Return Horizons (in trading days)
     FORWARD_PERIODS: dict[str, int] = None  # Will be set in __post_init__
