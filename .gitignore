@@ -63,3 +63,8 @@ config/secrets.env.backup
 # .github
 .github/
 .github/copilot-instructions.md
+
+# Local secrets (never commit)
+.env
+.env.*
+!.env.example
