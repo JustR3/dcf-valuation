@@ -24,3 +24,5 @@ Mid-run choices made during the build, newest last. User decisions live in the s
   and the new price label; their numbers did not change.
 - 2026-10-22 (review, Ask-user, not changed): unit-sanity warnings for percent/millions flags;
   lease liabilities inside yfinance "Total Debt" for FCFF net debt (documented as a limit only).
+- 2026-10-22 (user): both Ask-user items resolved as "keep". FCFF net debt keeps yfinance
+  "Total Debt" (lease double-count stays a documented limit). No unit-sanity warnings for now.
