@@ -1,6 +1,6 @@
 # Spec: lean reverse-DCF tool
 
-Status: draft, not approved. Date: 2026-10-22.
+Status: open questions answered 2026-10-22 (see "Decisions"). Build not started.
 Source: the revival audit of 2026-10-22 (summary in "Why" below).
 
 ## Goal
@@ -33,8 +33,12 @@ ranking. No XBRL parser.
 uv run dcf implied KO
 uv run dcf implied KO --years 10 --terminal-growth 2.5 --erp 5.0 --json
 uv run dcf value KO --growth 6 --discount-rate 8.5
+uv run dcf implied KO --model fcff --fade
 uv run dcf grid KO
 ```
+
+- `--model equity|fcff` (default `equity`) selects the cash-flow model.
+- `--fade` changes the growth path from constant to a linear fade.
 
 - `implied`: solve for the growth rate that makes the model value equal to the market price.
 - `value`: value per share for user inputs, with upside versus price.
@@ -44,21 +48,44 @@ uv run dcf grid KO
 
 ## Model
 
-Equity DCF on levered free cash flow (FCFE-style), discounted at the cost of equity:
+One discounting core serves both models. It takes a base cash flow, a growth path, and a
+discount rate:
 
 ```
-FCF_t   = FCF_0 × (1 + g)^t                       for t = 1..N
-TV_N    = FCF_N × (1 + g_T) / (r − g_T)
-Value   = Σ FCF_t / (1 + r)^t  +  TV_N / (1 + r)^N
-Per share = Value / shares
+CF_t    = CF_{t-1} × (1 + g_t)                    for t = 1..N,  CF_0 = base cash flow
+TV_N    = CF_N × (1 + g_T) / (r − g_T)
+PV      = Σ CF_t / (1 + r)^t  +  TV_N / (1 + r)^N
 ```
 
+**Growth path** (`g` is the input or the solved value):
+- Constant (default): g_t = g for every t.
+- Fade (`--fade`): g_t falls linearly from g in year 1 to g_T in year N:
+  g_t = g + (g_T − g) × (t − 1) / (N − 1). For N = 1, g_1 = g. The implied g is then the
+  *starting* growth rate, and the output says so.
+
+**Cash-flow model:**
+- `equity` (default): base = TTM levered FCF = Σ last 4 quarters of (OCF − |capex|).
+  r = cost of equity. Equity value = PV.
+- `fcff`: base = TTM levered FCF + TTM interest expense × (1 − t). r = WACC.
+  Equity value = PV − net debt.
+  - t = TTM tax provision / TTM pretax income. If pretax income ≤ 0 or a row is missing, use
+    21% and print a warning.
+  - Interest row missing (for example AAPL): use 0 and print a warning.
+  - WACC = E/(D+E) × Ke + D/(D+E) × Kd × (1 − t). E = price × shares. D = latest total debt.
+  - Kd = TTM interest / latest total debt. If interest is missing or D = 0, Kd = rf + 1.5% with
+    a warning.
+  - Net debt = total debt − cash. Cash = "Cash Cash Equivalents And Short Term Investments",
+    fallback "Cash And Cash Equivalents".
+
+Common rules:
+- Per share = equity value / shares.
 - No terminal-value cap. The output shows the terminal share of value for information.
-- Growth is constant for N years (default N = 10). A fade option is open question 3.
-- Implied growth: solve `Value(g)/shares = price` with `scipy.optimize.brentq` on
+- Implied growth: solve `per_share(g) = price` with `scipy.optimize.brentq` on
   g ∈ [−50%, +100%]. If no root exists in the bracket, report which bound fails. Do not
   extrapolate.
-- `Value(g)` must increase strictly with g when FCF_0 > 0. This is what makes the root unique.
+- `per_share(g)` must increase strictly with g when the base cash flow > 0, for both growth
+  paths. This is what makes the root unique. In `fcff` mode the per-share value can be
+  negative when net debt is large. The solver still works, and the output shows it.
 
 ## Inputs and defaults
 
@@ -67,12 +94,14 @@ Per share = Value / shares
 | FCF_0 | TTM: sum of the last 4 quarters of (Operating Cash Flow − \|Capital Expenditure\|). Fallback: sum of the "Free Cash Flow" row. | `--fcf` (millions) |
 | Shares | Latest quarterly "Ordinary Shares Number"; fallback `info.sharesOutstanding` | `--shares` |
 | Price | Last daily close, with its date | — |
-| r (discount rate) | rf + β × ERP | `--discount-rate` |
+| Ke (cost of equity) | rf + β × ERP | — |
+| r (discount rate) | `equity`: Ke. `fcff`: WACC as above | `--discount-rate` |
 | rf | FRED `DGS10`, latest observation, with its date | `--rf` |
 | β | yfinance `info.beta`, shown, not clipped | `--beta` |
-| ERP | 5.0% | `--erp` |
+| ERP | 5.0% (static) | `--erp` |
 | g_T | 2.5% | `--terminal-growth` |
 | N | 10 years | `--years` |
+| `fcff` only: interest, tax, debt, cash | Latest 4 quarters of the income statement; latest balance sheet | `--tax-rate`, `--kd` |
 
 ## Refusals and errors (exit code 2, one clear message)
 
@@ -80,6 +109,7 @@ Per share = Value / shares
 - Sector is "Financial Services": refuse, because FCF is not meaningful for banks and
   insurers. `--force` runs it with a warning.
 - r ≤ g_T, or fewer than 4 quarters of cash-flow data.
+- `fcff` mode and no total-debt row on the balance sheet.
 - `FRED_API_KEY` is not set and `--rf` is not given: name the missing variable and `.env`.
 
 ## Runtime contracts (assert at the data boundary)
@@ -110,18 +140,21 @@ The legacy code stays reachable through a git tag (see the plan).
 
 1. `uv run pytest -q` passes offline. A `conftest.py` guard fails any non-`integration` test
    that opens a network socket.
-2. Property tests (Hypothesis): value increases with g and decreases with r. Round trip:
-   `implied(value(g)) == g` within 1e-6 for every g in the bracket.
-3. A closed-form check: one hand-computed case matches to 1e-9.
-4. Golden test: `implied --json` on a saved KO fixture matches a saved JSON output.
+2. Property tests (Hypothesis), for each of the 4 combinations (equity/fcff × constant/fade):
+   value increases with g and decreases with r. Round trip: `implied(value(g)) == g` within
+   1e-6 for every g in the bracket.
+3. Closed-form checks: one hand-computed case per growth path matches to 1e-9. With
+   g = g_T, the constant and fade paths give the same value.
+4. Golden tests: `implied --json` on a saved KO fixture matches a saved JSON output, once for
+   `--model equity` and once for `--model fcff --fade`.
 5. `ruff check` is clean. Every command in the README runs in a regression test.
 6. A live run of `dcf implied` on AAPL, KO and XOM gives an answer with as-of dates. A live
    run on JPM refuses with the financials message.
 
-## Open questions (default in bold)
+## Decisions (answered by the user, 2026-10-22)
 
-1. **Rebuild in this repo** (tag the legacy code, then delete it) or start a new repo?
-2. **Equity DCF on levered FCF at cost of equity** or FCFF + WACC − net debt? FCFF needs
-   interest expense, and yfinance does not give it for every company (AAPL has no row).
-3. **Constant growth for N years** or a linear fade from g to g_T?
-4. ERP default: **5.0%**, or another value?
+1. Location: **rebuild in this repo**. Tag `main` as `legacy-v1`, then delete the old code on
+   the feature branch. The user approved this deletion.
+2. Model: **both**. `equity` is the default; `--model fcff` selects FCFF + WACC − net debt.
+3. Growth path: **both**. Constant is the default; `--fade` selects the linear fade.
+4. ERP default: **5.0%**, static, overridable with `--erp`.
