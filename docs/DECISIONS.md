@@ -11,3 +11,9 @@ Mid-run choices made during the build, newest last. User decisions live in the s
   The `fcff`-mode refusal is raised later, where the model is known (rates/CLI).
 - 2026-10-22 (task 4): `StaleRate` and `MissingSecret` live in `dcf/rates.py` and subclass
   `DCFInputError`, so every refusal maps to exit code 2.
+- 2026-10-22 (task 5): `--fcf` and `--shares` are in millions (spec says millions for `--fcf`; `--shares` follows it).
+  `grid` has no `--terminal-growth` flag, because it sweeps 1.5, 2.5 and 3.5%. The CLI checks `FRED_API_KEY`
+  before any network call. In `equity` mode the fcff-only data warnings are hidden.
+- 2026-10-22 (task 5 review): `load_company(require_positive_fcf=...)`. The CLI sets it to False
+  when `--fcf` is given, so the spec's `--fcf` override also works for a negative-TTM-FCF company
+  (with a warning). The CLI still refuses a non-positive base FCF.

@@ -338,3 +338,12 @@ def test_fcff_row_with_gap_is_none_with_warning():
     c = load_company("KO", fetcher=fetcher_for(raw), today=TODAY)
     assert c.ttm_interest is None
     assert any("interest" in w.lower() for w in c.warnings)
+
+
+# ---------------------------------------------------------------- --fcf override
+
+def test_negative_fcf_allowed_when_caller_supplies_override():
+    raw = raw_fixture("JPM")
+    c = load_company("JPM", fetcher=fetcher_for(raw), today=TODAY, force=True, require_positive_fcf=False)
+    assert c.ttm_fcf <= 0
+    assert any("TTM FCF" in w for w in c.warnings)

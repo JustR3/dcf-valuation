@@ -1,0 +1,61 @@
+{
+  "command": "implied",
+  "ticker": "KO",
+  "sector": "Consumer Defensive",
+  "model": "equity",
+  "model_label": "equity (levered FCF, cost of equity)",
+  "growth_path": "constant",
+  "inputs": {
+    "price": {
+      "value": 95.33999633789062,
+      "as_of": "2026-10-22",
+      "source": "yfinance last daily close"
+    },
+    "shares": {
+      "value": 4303000000.0,
+      "source": "balance sheet: Ordinary Shares Number (latest quarter)"
+    },
+    "levered_fcf": {
+      "value": 14297000000.0,
+      "as_of": "2026-06-30",
+      "source": "TTM Operating Cash Flow - |Capital Expenditure|"
+    },
+    "risk_free": {
+      "value": 0.0425,
+      "as_of": "2026-10-20",
+      "source": "FRED DGS10"
+    },
+    "beta": {
+      "value": 0.318,
+      "source": "yfinance info.beta"
+    },
+    "erp": 0.05,
+    "years": 10,
+    "terminal_growth": 0.025,
+    "base_cash_flow": 14297000000.0
+  },
+  "rate": {
+    "discount_rate": 0.05840000000000001,
+    "cost_of_equity": 0.05840000000000001,
+    "cost_of_debt": null,
+    "tax_rate": null,
+    "weight_equity": null,
+    "weight_debt": null,
+    "overridden": false
+  },
+  "warnings": [],
+  "result": {
+    "label": "implied growth",
+    "status": "ok",
+    "growth": 0.01708526632041568,
+    "bound": null,
+    "terminal_share": 0.7182095206435454,
+    "value_per_share": 95.3399963378802,
+    "breakdown": {
+      "explicit_pv": 115603981770.3534,
+      "terminal_pv": 294644022471.5451,
+      "total_pv": 410248004241.8985,
+      "terminal_share": 0.7182095206435454
+    }
+  }
+}

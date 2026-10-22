@@ -191,7 +191,10 @@ def load_company(
     today: date | None = None,
     allow_stale: bool = False,
     force: bool = False,
+    require_positive_fcf: bool = True,
 ) -> CompanyInputs:
+    """Fetch and validate inputs. Set require_positive_fcf=False when the caller supplies its
+    own base FCF (--fcf); a non-positive TTM FCF then becomes a warning, not NegativeFCF."""
     today = today or date.today()
     raw = fetcher(ticker)
     info = raw.get("info") or {}
@@ -211,7 +214,9 @@ def load_company(
 
     ttm_fcf, quarter_end, fcf_source = _ttm_fcf(cashflow)
     if not math.isfinite(ttm_fcf) or ttm_fcf <= 0:
-        raise NegativeFCF(f"{ticker}: DCF needs positive TTM FCF (got {ttm_fcf:,.0f})")
+        if require_positive_fcf:
+            raise NegativeFCF(f"{ticker}: DCF needs positive TTM FCF (got {ttm_fcf:,.0f})")
+        warnings.append(f"TTM FCF is not positive ({ttm_fcf:,.0f}); using the caller's --fcf instead.")
 
     # price: latest finite, positive close
     prices = {}
