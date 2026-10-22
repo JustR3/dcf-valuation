@@ -40,8 +40,12 @@ FCFF_ONLY_PREFIXES = (
     "TTM tax provision",
     "TTM pretax income",
     "Total Debt missing",
+    "Total Debt uses",
     "Cash missing",
+    "Cash Cash Equivalents",
+    "Cash And Cash Equivalents",
 )
+RF_NOT_USED = "not used"
 
 
 # ------------------------------------------------------------------ parser
@@ -94,7 +98,8 @@ def _inputs_block(
     erp: float, net_debt: float | None, base_cf: float, interest_added: float | None,
 ) -> dict:
     inputs: dict = {
-        "price": {"value": c.price, "as_of": c.price_date, "source": "yfinance last daily close"},
+        "price": {"value": c.price, "as_of": c.price_date, "source": "yfinance latest close (may be intraday)"},
+        "balance_sheet_date": c.balance_sheet_date,
         "shares": {"value": shares, "source": "--shares" if args.shares is not None else c.shares_source},
         "levered_fcf": {
             "value": base_fcf,
@@ -158,8 +163,10 @@ def build_report(
     kd_override = _pct(args.kd)
 
     # Fail fast on a missing secret, before any network access.
+    # An equity discount-rate override does not use rf, so it needs no FRED call or key.
+    rf_unused = args.rf is None and mdl == "equity" and override is not None
     api_key = None
-    if args.rf is None:
+    if args.rf is None and not rf_unused:
         api_key = require_fred_key(env)
 
     c = load_company(args.ticker, fetcher=fetcher, today=today, allow_stale=args.allow_stale, force=args.force,
@@ -167,6 +174,9 @@ def build_report(
 
     if args.rf is not None:
         rf = RiskFree(args.rf / 100.0, today, "--rf (user supplied)")
+        rf_asof = None
+    elif rf_unused:
+        rf = RiskFree(None, today, RF_NOT_USED)
         rf_asof = None
     else:
         rf = risk_free(api_key, fetch=rf_fetch, today=today, allow_stale=args.allow_stale)
@@ -186,6 +196,8 @@ def build_report(
 
     warnings: list[str] = list(rf.warnings)
     data_warnings = list(c.warnings)
+    if args.beta is not None:
+        data_warnings = [w for w in data_warnings if not w.startswith("beta missing")]
     if mdl == "equity":
         data_warnings = [w for w in data_warnings if not w.startswith(FCFF_ONLY_PREFIXES)]
     warnings += data_warnings
@@ -315,7 +327,12 @@ def render_text(rep: dict) -> str:
         lines.append(f"  FCFF base:       {_m(i['base_cash_flow'])}")
         lines.append(f"  Total debt:      {_m(i['total_debt']['value'])}; cash: {_m(i['cash']['value'])}"
                  f" ({i['cash']['source'] or 'none'}); net debt: {_m(i['net_debt'])}")
-    lines.append(f"  Risk-free:       {_p(i['risk_free']['value'])}  as of {_d(i['risk_free']['as_of'])}  ({i['risk_free']['source']})")
+    lines.append(f"  Balance sheet:   as of {_d(i['balance_sheet_date']) if i['balance_sheet_date'] else 'n/a'}"
+                 " (shares and debt)")
+    if i["risk_free"]["source"] == RF_NOT_USED:
+        lines.append("  Risk-free:       not used (--discount-rate replaces the cost of equity)")
+    else:
+        lines.append(f"  Risk-free:       {_p(i['risk_free']['value'])}  as of {_d(i['risk_free']['as_of'])}  ({i['risk_free']['source']})")
     lines.append(f"  Beta:            {i['beta']['value']:.3f}  ({i['beta']['source']})")
     lines.append(f"  ERP:             {_p(i['erp'])}")
     lines.append(f"  Years:           {i['years']}")
@@ -323,7 +340,10 @@ def render_text(rep: dict) -> str:
         lines.append(f"  Terminal growth: {_p(i['terminal_growth'])}")
     lines.append("")
     lines.append("Discount rate")
-    lines.append(f"  Cost of equity = rf + beta x ERP = {_p(rate['cost_of_equity'])}")
+    if rate["cost_of_equity"] is None:
+        lines.append("  Cost of equity = not computed (rf not used)")
+    else:
+        lines.append(f"  Cost of equity = rf + beta x ERP = {_p(rate['cost_of_equity'])}")
     if rep["model"] == "fcff":
         lines.append(f"  Cost of debt (pre-tax) = {_p(rate['cost_of_debt'])}; tax rate = {_p(rate['tax_rate'])}")
         lines.append(f"  Weights: equity {_p(rate['weight_equity'], 1)}, debt {_p(rate['weight_debt'], 1)}")

@@ -10,13 +10,14 @@ from datetime import date
 
 import requests
 
-from dcf.errors import DCFInputError
+from dcf.errors import DataUnavailable, DCFInputError
 from dcf.model import wacc
 
 ERP_DEFAULT = 0.05
 KD_SPREAD = 0.015
 TAX_FALLBACK = 0.21
 TAX_MAX = 0.99
+KD_WARN = 0.15
 FRED_MAX_AGE_DAYS = 10
 FRED_URL = "https://api.stlouisfed.org/fred/series/observations"
 FRED_SERIES = "DGS10"
@@ -33,7 +34,7 @@ class MissingSecret(DCFInputError):  # noqa: N818
 
 @dataclass(frozen=True)
 class RiskFree:
-    rate: float
+    rate: float | None
     obs_date: date
     source: str
     warnings: tuple[str, ...] = ()
@@ -43,7 +44,7 @@ class RiskFree:
 class RateBreakdown:
     model: str
     rate: float
-    ke: float
+    ke: float | None
     kd: float | None
     tax_rate: float | None
     weight_equity: float | None
@@ -53,19 +54,26 @@ class RateBreakdown:
 
 def fred_fetch(api_key: str, series: str = FRED_SERIES) -> dict:
     """Fetch the latest observations of a FRED series (newest first)."""
-    resp = requests.get(
-        FRED_URL,
-        params={
-            "series_id": series,
-            "api_key": api_key,
-            "file_type": "json",
-            "sort_order": "desc",
-            "limit": 10,
-        },
-        timeout=FRED_TIMEOUT_S,
-    )
-    resp.raise_for_status()
-    return resp.json()
+    # Messages never include the exception text: it can carry the request URL and the API key.
+    try:
+        resp = requests.get(
+            FRED_URL,
+            params={
+                "series_id": series,
+                "api_key": api_key,
+                "file_type": "json",
+                "sort_order": "desc",
+                "limit": 10,
+            },
+            timeout=FRED_TIMEOUT_S,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except requests.HTTPError as e:
+        status = getattr(e.response, "status_code", "unknown")
+        raise DataUnavailable(f"FRED {series} request failed (HTTP status {status}).") from None
+    except (requests.RequestException, ValueError) as e:
+        raise DataUnavailable(f"FRED {series} request failed ({type(e).__name__}).") from None
 
 
 def require_fred_key(env: Mapping[str, str] = os.environ) -> str:
@@ -86,12 +94,22 @@ def risk_free(
     today = today or date.today()
     payload = fetch(api_key, FRED_SERIES)
     latest = None
-    for row in payload.get("observations", []):
-        value = str(row.get("value", ".")).strip()
+    rows = payload.get("observations") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        raise DataUnavailable(f"FRED {FRED_SERIES} returned an unexpected payload (no observations list).")
+    for row in rows:
+        if not isinstance(row, dict) or "date" not in row or "value" not in row:
+            raise DataUnavailable(f"FRED {FRED_SERIES} returned a row without date or value.")
+        value = str(row["value"]).strip()
         if value in ("", "."):
             continue
-        d = date.fromisoformat(row["date"])
-        pct = float(value)
+        try:
+            d = date.fromisoformat(str(row["date"]))
+            pct = float(value)
+        except ValueError:
+            raise DataUnavailable(
+                f"FRED {FRED_SERIES} returned an unreadable row (date {row['date']!r}, value {value!r})."
+            ) from None
         if not math.isfinite(pct):
             continue
         if latest is None or d > latest[0]:
@@ -142,7 +160,7 @@ def fcff_tax_rate(
 
 def discount_rate(
     model: str,
-    rf: float,
+    rf: float | None,
     beta: float,
     erp: float,
     price: float,
@@ -157,11 +175,17 @@ def discount_rate(
 ) -> RateBreakdown:
     if model not in ("equity", "fcff"):
         raise ValueError(f"model must be 'equity' or 'fcff', got {model!r}")
-    ke = cost_of_equity(rf, beta, erp)
     warnings: list[str] = []
+    if rf is None:
+        # rf is only optional when an equity discount-rate override makes Ke unnecessary.
+        if model != "equity" or override is None:
+            raise ValueError("a risk-free rate is required unless the equity model has a discount-rate override")
+        ke = None
+    else:
+        ke = cost_of_equity(rf, beta, erp)
 
     if model == "equity":
-        rate = ke
+        rate = ke if ke is not None else override
         kd = tax = we = wd = None
     else:
         if _missing(total_debt):
@@ -177,14 +201,17 @@ def discount_rate(
             )
         else:
             kd = ttm_interest / total_debt
+        if kd > KD_WARN:
+            warnings.append(f"Kd {kd:.1%} is above {KD_WARN:.0%}; check interest and debt inputs.")
         e = price * shares
         rate = wacc(e, total_debt, ke, kd, tax)
         we = e / (e + total_debt)
         wd = total_debt / (e + total_debt)
 
     if override is not None:
-        warnings.append(
-            f"Discount rate override {override:.2%} replaces computed {rate:.2%}."
-        )
+        if ke is not None:
+            warnings.append(
+                f"Discount rate override {override:.2%} replaces computed {rate:.2%}."
+            )
         rate = override
     return RateBreakdown(model, rate, ke, kd, tax, we, wd, tuple(warnings))

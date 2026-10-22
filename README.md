@@ -51,7 +51,7 @@ uv run dcf grid KO --model fcff --fade --json
   range of -50% to +100%.
 
 Every command prints its inputs with sources and as-of dates (price date, latest quarter end,
-FRED date), the model name, the rate breakdown, warnings, and the result. `--json` prints the same
+balance sheet date, FRED date), the model name, the rate breakdown, warnings, and the result. `--json` prints the same
 content as JSON: dates are ISO strings and numbers are decimals (0.05 = 5%).
 
 Exit code `0` means success. Exit code `2` means a refusal or an input error, with one line on
@@ -115,6 +115,11 @@ PV   = sum CF_t / (1 + r)^t  +  TV_N / (1 + r)^N
 - `--model fcff` and the balance sheet has no Total Debt.
 - Beta is missing from yfinance and `--beta` is not given.
 - `FRED_API_KEY` is not set and `--rf` is not given.
+- Price currency differs from the financial statement currency (yfinance `currency` and
+  `financialCurrency`). There is no override flag.
+- The price date is more than 1 day after today.
+- A data source fails (yfinance error, FRED HTTP or network error, malformed FRED row).
+- A growth rate (`--growth`, `--terminal-growth`) is -100% or lower.
 - Stale data: latest quarter end older than 200 days, price older than 7 days, FRED observation
   older than 10 days. `--allow-stale` continues and prints a warning with the date.
 
@@ -128,6 +133,19 @@ PV   = sum CF_t / (1 + r)^t  +  TV_N / (1 + r)^N
   or a row is missing. Interest 0 in the FCFF base when the row is missing (for example AAPL).
   Kd = rf + 1.5% when interest is missing or debt is 0. Cash = 0 when no cash row exists.
   Shares fall back to `info.sharesOutstanding`.
+- **Split check.** If the balance-sheet share count and `info.sharesOutstanding` differ by more
+  than a factor of 1.5, a warning names both counts: a split may have happened after the quarter
+  end.
+- **Older columns.** When a TTM sum, the share count, debt or cash uses a quarter older than the
+  newest column of its table, a warning names the row and the date used. The balance sheet date
+  of the debt and share values is printed with the inputs.
+- **Price.** The price is the latest close that yfinance returns. It may be an intraday value
+  while the market is open. Its date is printed.
+- **`--discount-rate` with `equity`.** The risk-free rate is not used, so the tool does not
+  call FRED, does not need `FRED_API_KEY`, and shows the risk-free rate as "not used". The
+  `fcff` model still needs it.
+- **Leases in debt.** yfinance "Total Debt" may include lease liabilities, so FCFF net debt can
+  double-count leases. The `equity` model is not affected.
 - **Beta is not clipped.** A very low beta (KO is about 0.3) gives a low discount rate and a high
   terminal share of value. Judge the result with `grid`.
 - **Financials.** Card networks and brokers can pass the sector check but still have unreliable

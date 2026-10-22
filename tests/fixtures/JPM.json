@@ -1045,6 +1045,8 @@
   }
  },
  "info": {
+  "currency": "USD",
+  "financialCurrency": "USD",
   "beta": 1.015,
   "sector": "Financial Services",
   "sharesOutstanding": 2655600000

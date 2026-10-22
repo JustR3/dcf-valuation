@@ -5,8 +5,10 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+import requests
 
 from dcf import model
+from dcf.errors import DataUnavailable
 from dcf.rates import (
     ERP_DEFAULT,
     KD_SPREAD,
@@ -16,6 +18,7 @@ from dcf.rates import (
     cost_of_equity,
     discount_rate,
     fcff_tax_rate,
+    fred_fetch,
     require_fred_key,
     risk_free,
 )
@@ -201,3 +204,76 @@ def test_unknown_model_raises():
     with pytest.raises(ValueError):
         discount_rate("ddm", total_debt=1.0, ttm_interest=1.0, ttm_tax_provision=1.0,
                       ttm_pretax_income=1.0, **COMMON)
+
+
+# ---------------------------------------------------------------- review fixes
+
+@pytest.mark.parametrize("row", [{"value": "4.1"}, {"date": "2026-10-20"}, {}])
+def test_fred_row_without_date_or_value_is_data_unavailable(row):
+    with pytest.raises(DataUnavailable):
+        risk_free("k", fetch=fetch_with([obs("2026-10-19", "4.0"), row]), today=TODAY)
+
+
+def test_fred_payload_without_observations_list_is_data_unavailable():
+    with pytest.raises(DataUnavailable):
+        risk_free("k", fetch=lambda k, s="DGS10": {"error_code": 400}, today=TODAY)
+
+
+class _Resp:
+    def __init__(self, status):
+        self.status_code = status
+
+    def raise_for_status(self):
+        raise requests.HTTPError(f"{self.status_code} Error for url: https://x/?api_key=SECRETKEY", response=self)
+
+    def json(self):
+        return {}
+
+
+@pytest.mark.parametrize(
+    "boom",
+    [requests.ConnectionError("down api_key=SECRETKEY"), requests.Timeout("slow"), _Resp(500)],
+)
+def test_fred_fetch_request_errors_become_data_unavailable(monkeypatch, boom):
+    def fake_get(*a, **k):
+        if isinstance(boom, Exception):
+            raise boom
+        return boom
+
+    monkeypatch.setattr("dcf.rates.requests.get", fake_get)
+    with pytest.raises(DataUnavailable) as exc:
+        fred_fetch("SECRETKEY")
+    msg = str(exc.value)
+    assert "FRED" in msg and "\n" not in msg and "SECRETKEY" not in msg
+
+
+def test_fred_fetch_bad_json_is_data_unavailable(monkeypatch):
+    class R:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            raise requests.exceptions.JSONDecodeError("bad", "doc", 0)
+
+    monkeypatch.setattr("dcf.rates.requests.get", lambda *a, **k: R())
+    with pytest.raises(DataUnavailable):
+        fred_fetch("k")
+
+
+def _fcff(**kw):
+    args = {"model": "fcff", "rf": 0.04, "beta": 1.0, "erp": 0.05, "price": 50.0, "shares": 100.0,
+            "total_debt": 1000.0, "ttm_interest": 40.0, "ttm_tax_provision": 20.0,
+            "ttm_pretax_income": 100.0}
+    args.update(kw)
+    return discount_rate(**args)
+
+
+def test_kd_above_15_percent_warns():
+    assert any("Kd" in w and "15" in w for w in _fcff(kd_override=0.20).warnings)
+    assert any("Kd" in w and "15" in w for w in _fcff(ttm_interest=200.0).warnings)
+    assert not any("15%" in w for w in _fcff(kd_override=0.15).warnings)
+
+
+def test_equity_override_without_rf_has_no_ke():
+    rb = discount_rate("equity", None, 1.0, 0.05, 50.0, 100.0, None, None, None, None, override=0.085)
+    assert rb.rate == 0.085 and rb.ke is None

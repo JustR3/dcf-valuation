@@ -152,3 +152,68 @@ def test_fcf_override_rescues_negative_ttm_fcf(capsys):
 
 def test_fcf_override_must_be_positive():
     assert run(["implied", "KO", "--fcf", "-5"]) == 2
+
+
+# ---------------------------------------------------------------- review fixes
+
+def boom_fred(*a, **k):
+    raise AssertionError("FRED must not be called")
+
+
+def test_equity_discount_rate_needs_no_fred_or_key(capsys):
+    assert run(["value", "KO", "--growth", "6", "--discount-rate", "8.5"], env={}, rf_fetch=boom_fred) == 0
+    out = capsys.readouterr().out
+    assert "not used" in out
+    assert run(["value", "KO", "--growth", "6", "--discount-rate", "8.5", "--json"], env={},
+               rf_fetch=boom_fred) == 0
+    rep = json.loads(capsys.readouterr().out)
+    assert rep["inputs"]["risk_free"]["source"] == "not used"
+    assert rep["inputs"]["risk_free"]["value"] is None
+    assert rep["rate"]["discount_rate"] == pytest.approx(0.085)
+
+
+def test_fcff_discount_rate_still_needs_key(capsys):
+    assert run(["value", "KO", "--growth", "6", "--discount-rate", "8.5", "--model", "fcff"], env={}) == 2
+    assert "FRED_API_KEY" in capsys.readouterr().err
+
+
+def test_beta_flag_hides_missing_beta_warning(capsys):
+    raw = fetcher("KO")
+    raw["info"]["beta"] = None
+    assert main(["implied", "KO", "--beta", "0.6", "--json"], fetcher=lambda t: raw, rf_fetch=fred,
+                today=TODAY, env=ENV) == 0
+    rep = json.loads(capsys.readouterr().out)
+    assert not any("beta missing" in w for w in rep["warnings"])
+
+
+def test_price_label_and_balance_sheet_date(capsys):
+    assert run(["implied", "KO"]) == 0
+    out = capsys.readouterr().out
+    assert "latest close (may be intraday)" in out and "last daily close" not in out
+    assert "Balance sheet" in out and "2026-06-30" in out
+    assert run(["implied", "KO", "--json"]) == 0
+    rep = json.loads(capsys.readouterr().out)
+    assert rep["inputs"]["balance_sheet_date"] == "2026-06-30"
+    assert rep["inputs"]["price"]["source"] == "yfinance latest close (may be intraday)"
+
+
+@pytest.mark.parametrize("argv", [["value", "KO", "--growth", "-100"], ["value", "KO", "--growth", "-150"],
+                                  ["implied", "KO", "--terminal-growth", "-100"],
+                                  ["implied", "KO", "--terminal-growth", "-100", "--fade"]])
+def test_growth_at_or_below_minus_100_exit_2(argv, capsys):
+    assert run(argv) == 2
+    assert len(capsys.readouterr().err.strip().splitlines()) == 1
+
+
+def test_currency_mismatch_exit_2(capsys):
+    raw = fetcher("KO")
+    raw["info"]["currency"] = "EUR"
+    assert main(["implied", "KO"], fetcher=lambda t: raw, rf_fetch=fred, today=TODAY, env=ENV) == 2
+    err = capsys.readouterr().err
+    assert "EUR" in err and "USD" in err
+
+
+def test_fred_malformed_row_exit_2_one_line(capsys):
+    bad = {"observations": [{"date": "2026-10-20"}]}
+    assert run(["implied", "KO"], rf_fetch=lambda k, s="DGS10": bad) == 2
+    assert len(capsys.readouterr().err.strip().splitlines()) == 1

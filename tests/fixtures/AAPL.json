@@ -1125,6 +1125,8 @@
   }
  },
  "info": {
+  "currency": "USD",
+  "financialCurrency": "USD",
   "beta": 1.069,
   "sector": "Technology",
   "sharesOutstanding": 14594180000

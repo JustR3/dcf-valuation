@@ -1462,6 +1462,8 @@
   }
  },
  "info": {
+  "currency": "USD",
+  "financialCurrency": "USD",
   "beta": 0.318,
   "sector": "Consumer Defensive",
   "sharesOutstanding": 4302549243

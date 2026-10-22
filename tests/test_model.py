@@ -190,7 +190,7 @@ class TestProperties:
 
     @settings(max_examples=60, deadline=None)
     @given(
-        g=st.floats(-0.45, 0.95),
+        g=st.floats(-0.499, 0.999),
         r=rates,
         g_t=g_ts,
         years=years_st,
@@ -307,3 +307,21 @@ def test_model_module_is_pure():
     src = Path(model.__file__).read_text()
     for banned in ("import requests", "import yfinance", "import socket", "import urllib", "open("):
         assert banned not in src
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: growth_path(-1.0, 0.02, 5, False),
+        lambda: growth_path(-1.5, 0.02, 5, True),
+        lambda: growth_path(0.05, -1.0, 5, True),
+        lambda: growth_path(0.05, -1.2, 5, False),
+        lambda: discount(100.0, [-1.0], 0.08, 0.02),
+        lambda: discount(100.0, [0.05], 0.08, -1.0),
+        lambda: discount(100.0, [0.05], 0.08, -2.0),
+        lambda: per_share(100.0, -1.0, 0.08, 0.02, 10, 10.0),
+    ],
+)
+def test_growth_at_or_below_minus_100_percent_rejected(call):
+    with pytest.raises(ValueError, match="-100%|100%"):
+        call()

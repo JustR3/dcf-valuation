@@ -23,3 +23,11 @@ class StaleData(DCFInputError):  # noqa: N818
 
 class MissingData(DCFInputError):  # noqa: N818
     pass
+
+
+class CurrencyMismatch(DCFInputError):  # noqa: N818
+    """Price currency and financial-statement currency differ."""
+
+
+class DataUnavailable(DCFInputError):  # noqa: N818
+    """A data source failed or returned an unusable payload."""

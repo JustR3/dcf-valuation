@@ -9,8 +9,9 @@
     "price": {
       "value": 95.33999633789062,
       "as_of": "2026-10-22",
-      "source": "yfinance last daily close"
+      "source": "yfinance latest close (may be intraday)"
     },
+    "balance_sheet_date": "2026-06-30",
     "shares": {
       "value": 4303000000.0,
       "source": "balance sheet: Ordinary Shares Number (latest quarter)"

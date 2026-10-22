@@ -17,3 +17,10 @@ Mid-run choices made during the build, newest last. User decisions live in the s
 - 2026-10-22 (task 5 review): `load_company(require_positive_fcf=...)`. The CLI sets it to False
   when `--fcf` is given, so the spec's `--fcf` override also works for a negative-TTM-FCF company
   (with a warning). The CLI still refuses a non-positive base FCF.
+- 2026-10-22 (review): Applied 11 Auto-fix findings (currency mismatch refusal, split warning,
+  roll-back warnings + balance_sheet_date, g/g_T > -100%, FCF-row fallback on gaps, network
+  errors -> exit 2, sector-None warning, Kd > 15% warning, future price refusal, equity
+  --discount-rate without FRED, wider round-trip test). The goldens gained `balance_sheet_date`
+  and the new price label; their numbers did not change.
+- 2026-10-22 (review, Ask-user, not changed): unit-sanity warnings for percent/millions flags;
+  lease liabilities inside yfinance "Total Debt" for FCFF net debt (documented as a limit only).

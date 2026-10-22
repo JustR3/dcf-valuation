@@ -54,6 +54,8 @@ def test_readme_command_runs(line, expected, capsys):
     code = main(argv, fetcher=fetcher, rf_fetch=fred, today=TODAY, env={"FRED_API_KEY": "test-key"})
     assert code == expected
     cap = capsys.readouterr()
+    if argv[1] == "JPM" and expected == 2:
+        assert "Financial Services" in cap.err
     if "--json" in argv and expected == 0:
         json.loads(cap.out)
 

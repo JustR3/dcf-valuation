@@ -68,12 +68,12 @@ PV      = Σ CF_t / (1 + r)^t  +  TV_N / (1 + r)^N
   r = cost of equity. Equity value = PV.
 - `fcff`: base = TTM levered FCF + TTM interest expense × (1 − t). r = WACC.
   Equity value = PV − net debt.
-  - t = TTM tax provision / TTM pretax income. If pretax income ≤ 0 or a row is missing, use
-    21% and print a warning.
+  - t = TTM tax provision / TTM pretax income, clipped to [0, 99%] with a warning. If pretax
+    income ≤ 0 or a row is missing, use 21% and print a warning.
   - Interest row missing (for example AAPL): use 0 and print a warning.
   - WACC = E/(D+E) × Ke + D/(D+E) × Kd × (1 − t). E = price × shares. D = latest total debt.
   - Kd = TTM interest / latest total debt. If interest is missing or D = 0, Kd = rf + 1.5% with
-    a warning.
+    a warning. Print a warning when Kd > 15%.
   - Net debt = total debt − cash. Cash = "Cash Cash Equivalents And Short Term Investments",
     fallback "Cash And Cash Equivalents".
 
@@ -93,7 +93,7 @@ Common rules:
 |---|---|---|
 | FCF_0 | TTM: sum of the last 4 quarters of (Operating Cash Flow − \|Capital Expenditure\|). Fallback: sum of the "Free Cash Flow" row. | `--fcf` (millions) |
 | Shares | Latest quarterly "Ordinary Shares Number"; fallback `info.sharesOutstanding` | `--shares` |
-| Price | Last daily close, with its date | — |
+| Price | Latest close (may be intraday), with its date | — |
 | Ke (cost of equity) | rf + β × ERP | — |
 | r (discount rate) | `equity`: Ke. `fcff`: WACC as above | `--discount-rate` |
 | rf | FRED `DGS10`, latest observation, with its date | `--rf` |

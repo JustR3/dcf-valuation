@@ -14,6 +14,8 @@ from hypothesis import strategies as st
 
 from dcf.data import CompanyInputs, load_company
 from dcf.errors import (
+    CurrencyMismatch,
+    DataUnavailable,
     DCFInputError,
     FinancialsSector,
     MissingData,
@@ -347,3 +349,152 @@ def test_negative_fcf_allowed_when_caller_supplies_override():
     c = load_company("JPM", fetcher=fetcher_for(raw), today=TODAY, force=True, require_positive_fcf=False)
     assert c.ttm_fcf <= 0
     assert any("TTM FCF" in w for w in c.warnings)
+
+
+# ---------------------------------------------------------------- review fixes
+
+def test_fixtures_carry_currency_keys():
+    for t in ("KO", "AAPL", "JPM"):
+        info = raw_fixture(t)["info"]
+        assert info["currency"] == "USD" and info["financialCurrency"] == "USD"
+
+
+def test_currency_mismatch_refused_naming_both():
+    raw = raw_fixture("KO")
+    raw["info"]["currency"], raw["info"]["financialCurrency"] = "JPY", "USD"
+    with pytest.raises(CurrencyMismatch, match="JPY.*USD|USD.*JPY") as exc:
+        load_company("KO", fetcher=fetcher_for(raw), today=TODAY)
+    assert isinstance(exc.value, DCFInputError)
+
+
+@pytest.mark.parametrize(("cur", "fin"), [("USD", None), (None, "USD"), ("USD", "USD"), (None, None)])
+def test_currency_ok_when_equal_or_one_missing(cur, fin):
+    raw = raw_fixture("KO")
+    raw["info"]["currency"], raw["info"]["financialCurrency"] = cur, fin
+    load_company("KO", fetcher=fetcher_for(raw), today=TODAY)
+
+
+def test_yf_fetch_keeps_currency_keys(monkeypatch):
+    import pandas as pd
+    import yfinance
+
+    class FakeTicker:
+        info = {"sector": "X", "beta": 1.0, "sharesOutstanding": 5.0, "currency": "EUR",
+                "financialCurrency": "USD", "other": 1}
+        quarterly_cashflow = quarterly_income_stmt = quarterly_balance_sheet = pd.DataFrame()
+
+        def __init__(self, ticker):
+            pass
+
+        def history(self, **kw):
+            return pd.DataFrame()
+
+    monkeypatch.setattr(yfinance, "Ticker", FakeTicker)
+    from dcf.data import yf_fetch
+    info = yf_fetch("zzz")["info"]
+    assert info["currency"] == "EUR" and info["financialCurrency"] == "USD"
+    assert "other" not in info
+
+
+def test_yf_fetch_exception_becomes_data_unavailable(monkeypatch):
+    import yfinance
+
+    class Boom:
+        def __init__(self, ticker):
+            raise RuntimeError("Too Many Requests\nsecond line")
+
+    monkeypatch.setattr(yfinance, "Ticker", Boom)
+    from dcf.data import yf_fetch
+    with pytest.raises(DataUnavailable) as exc:
+        yf_fetch("KO")
+    assert "\n" not in str(exc.value) and exc.value.exit_code == 2
+
+
+def test_data_unavailable_is_input_error():
+    assert issubclass(DataUnavailable, DCFInputError) and issubclass(CurrencyMismatch, DCFInputError)
+
+
+def test_split_warning_names_both_counts():
+    raw = raw_fixture("KO")
+    raw["info"]["sharesOutstanding"] = 4303000000.0 * 2
+    c = load_company("KO", fetcher=fetcher_for(raw), today=TODAY)
+    w = [w for w in c.warnings if "split" in w.lower()]
+    assert len(w) == 1 and "4,303,000,000" in w[0] and "8,606,000,000" in w[0]
+    assert "quarter end" in w[0]
+
+
+def test_split_warning_other_direction_and_below_threshold():
+    raw = raw_fixture("KO")
+    raw["info"]["sharesOutstanding"] = 4303000000.0 / 2
+    assert any("split" in w.lower() for w in load_company("KO", fetcher=fetcher_for(raw), today=TODAY).warnings)
+    raw["info"]["sharesOutstanding"] = 4303000000.0 * 1.4
+    assert not any("split" in w.lower() for w in load_company("KO", fetcher=fetcher_for(raw), today=TODAY).warnings)
+
+
+def test_balance_sheet_date_and_no_rollback_warning_on_clean_data():
+    c = load_company("KO", fetcher=fixture_fetcher, today=TODAY)
+    assert c.balance_sheet_date == date(2026, 6, 30)
+    assert c.warnings == ()
+
+
+def test_latest_value_rollback_warns_and_sets_balance_sheet_date():
+    raw = raw_fixture("KO")
+    raw["balance"]["Total Debt"]["2026-06-30"] = None
+    raw["balance"]["Ordinary Shares Number"]["2026-06-30"] = None
+    c = load_company("KO", fetcher=fetcher_for(raw), today=TODAY)
+    assert c.balance_sheet_date == date(2026, 3, 31)
+    assert any("Total Debt" in w and "2026-03-31" in w for w in c.warnings)
+    assert any("Ordinary Shares Number" in w and "2026-03-31" in w for w in c.warnings)
+
+
+def test_cash_rollback_warns():
+    raw = raw_fixture("KO")
+    raw["balance"]["Cash Cash Equivalents And Short Term Investments"]["2026-06-30"] = None
+    c = load_company("KO", fetcher=fetcher_for(raw), today=TODAY)
+    assert any("Cash Cash Equivalents" in w and "2026-03-31" in w for w in c.warnings)
+
+
+def test_ttm_series_rollback_warns_for_income_and_cashflow():
+    raw = raw_fixture("KO")
+    raw["income"]["Interest Expense"]["2026-06-30"] = None
+    c = load_company("KO", fetcher=fetcher_for(raw), today=TODAY)
+    assert c.ttm_interest is not None
+    assert any("Interest Expense" in w and "2026-03-31" in w for w in c.warnings)
+    raw = raw_fixture("KO")
+    raw["cashflow"]["Operating Cash Flow"]["2026-06-30"] = None
+    c = load_company("KO", fetcher=fetcher_for(raw), today=TODAY, allow_stale=True)
+    assert c.latest_quarter_end == date(2026, 3, 31)
+    assert any("2026-03-31" in w and "2026-06-30" in w and "cash" in w.lower() and "newest" in w for w in c.warnings)
+
+
+def test_gap_in_ocf_capex_falls_back_to_free_cash_flow_row():
+    dates = QUARTER_ENDS[1:]
+    raw = synth(dates, [100.0, 100.0, None, 100.0, 100.0], [-10.0] * 5)
+    raw["cashflow"]["Free Cash Flow"] = dict(zip(dates, [50.0] * 5, strict=True))
+    c = load_company("ZZZ", fetcher=fetcher_for(raw), today=TODAY)
+    assert c.ttm_fcf == pytest.approx(200.0)
+    assert "Free Cash Flow" in c.fcf_source
+
+
+def test_gap_in_ocf_capex_and_fcf_row_still_missing_data():
+    dates = QUARTER_ENDS[1:]
+    raw = synth(dates, [100.0, 100.0, None, 100.0, 100.0], [-10.0] * 5)
+    raw["cashflow"]["Free Cash Flow"] = dict(zip(dates, [50.0, 50.0, None, 50.0, 50.0], strict=True))
+    with pytest.raises(MissingData, match="consecutive"):
+        load_company("ZZZ", fetcher=fetcher_for(raw), today=TODAY)
+
+
+def test_sector_none_warns():
+    raw = raw_fixture("KO")
+    raw["info"]["sector"] = None
+    c = load_company("KO", fetcher=fetcher_for(raw), today=TODAY)
+    assert "sector unknown; financials check skipped" in c.warnings
+
+
+def test_price_date_more_than_one_day_ahead_refused():
+    raw = raw_fixture("KO")
+    raw["prices"] = {"2026-10-24": 60.0}
+    with pytest.raises(MissingData, match="2026-10-24"):
+        load_company("KO", fetcher=fetcher_for(raw), today=TODAY)
+    raw["prices"] = {"2026-10-23": 60.0}
+    assert load_company("KO", fetcher=fetcher_for(raw), today=TODAY).price_date == date(2026, 10, 23)

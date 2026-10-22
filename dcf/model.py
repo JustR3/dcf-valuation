@@ -76,13 +76,21 @@ def _check_tax(tax_rate: float) -> None:
         raise ValueError(f"tax_rate must satisfy 0 <= tax < 1, got {tax_rate}")
 
 
+def _check_growth(**values: float) -> None:
+    """Growth rates must be finite and above -100% (a rate of -100% or less zeroes the cash flow)."""
+    _finite(**values)
+    for name, v in values.items():
+        if v <= -1.0:
+            raise ValueError(f"{name} must be above -100%, got {v:.2%}")
+
+
 def growth_path(g: float, g_t: float, years: int, fade: bool) -> list[float]:
     """Growth rate for each year t = 1..years.
 
     Constant: g every year. Fade: g_t_ = g + (g_t - g) * (t - 1) / (years - 1), so the first
     element is g and the last is g_t; for years == 1 the path is [g].
     """
-    _finite(g=g, g_t=g_t)
+    _check_growth(g=g, g_t=g_t)
     _check_years(years)
     if not fade or years == 1:
         return [float(g)] * years
@@ -96,7 +104,8 @@ def discount(base_cf: float, path: Sequence[float], r: float, g_t: float) -> Val
     PV = sum CF_t / (1+r)^t + TV_N / (1+r)^N. No terminal-value cap.
     Requires finite inputs, base_cf > 0, r > g_t, 1 <= len(path) <= 30.
     """
-    _finite(base_cf=base_cf, r=r, g_t=g_t)
+    _finite(base_cf=base_cf, r=r)
+    _check_growth(g_t=g_t)
     if base_cf <= 0:
         raise ValueError(f"base cash flow must be positive, got {base_cf}")
     if r <= g_t:
@@ -106,7 +115,7 @@ def discount(base_cf: float, path: Sequence[float], r: float, g_t: float) -> Val
     cf = float(base_cf)
     explicit = 0.0
     for t, g in enumerate(path, start=1):
-        _finite(growth=g)
+        _check_growth(growth=g)
         cf *= 1.0 + g
         pv = cf / (1.0 + r) ** t
         explicit += pv
