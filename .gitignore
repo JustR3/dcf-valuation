@@ -68,3 +68,4 @@ config/secrets.env.backup
 .env
 .env.*
 !.env.example
+.hypothesis/
