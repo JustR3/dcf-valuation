@@ -1,0 +1,72 @@
+{
+  "command": "implied",
+  "ticker": "KO",
+  "sector": "Consumer Defensive",
+  "model": "fcff",
+  "model_label": "fcff (FCFF, WACC, minus net debt)",
+  "growth_path": "fade",
+  "inputs": {
+    "price": {
+      "value": 95.33999633789062,
+      "as_of": "2026-10-22",
+      "source": "yfinance latest close (may be intraday)"
+    },
+    "balance_sheet_date": "2026-06-30",
+    "shares": {
+      "value": 4303000000.0,
+      "source": "balance sheet: Ordinary Shares Number (latest quarter)"
+    },
+    "levered_fcf": {
+      "value": 14297000000.0,
+      "as_of": "2026-06-30",
+      "source": "TTM Operating Cash Flow - |Capital Expenditure|"
+    },
+    "risk_free": {
+      "value": 0.0425,
+      "as_of": "2026-10-20",
+      "source": "FRED DGS10"
+    },
+    "beta": {
+      "value": 0.318,
+      "source": "yfinance info.beta"
+    },
+    "erp": 0.05,
+    "years": 10,
+    "terminal_growth": 0.025,
+    "base_cash_flow": 15605983692.182693,
+    "interest_added_after_tax": 1308983692.1826935,
+    "total_debt": {
+      "value": 43543000000.0,
+      "source": "balance sheet: Total Debt (latest quarter)"
+    },
+    "cash": {
+      "value": 16371000000.0,
+      "source": "Cash Cash Equivalents And Short Term Investments"
+    },
+    "net_debt": 27172000000.0
+  },
+  "rate": {
+    "discount_rate": 0.055680846256794855,
+    "cost_of_equity": 0.05840000000000001,
+    "cost_of_debt": 0.035964448935534986,
+    "tax_rate": 0.1641228019267599,
+    "weight_equity": 0.904046136673118,
+    "weight_debt": 0.09595386332688208,
+    "overridden": false
+  },
+  "warnings": [],
+  "result": {
+    "label": "implied starting growth",
+    "status": "ok",
+    "growth": -0.013468522548449742,
+    "bound": null,
+    "terminal_share": 0.7337825853675878,
+    "value_per_share": 95.33999633789053,
+    "breakdown": {
+      "explicit_pv": 116448822637.78882,
+      "terminal_pv": 320971181604.1541,
+      "total_pv": 437420004241.94293,
+      "terminal_share": 0.7337825853675878
+    }
+  }
+}

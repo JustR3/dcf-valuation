@@ -1,307 +1,167 @@
-# DCF Valuation Toolkit
+# dcf-valuation
 
-A comprehensive Discounted Cash Flow (DCF) valuation tool for fundamental stock analysis and portfolio optimization.
+A lean reverse-DCF tool for one stock at a time.
 
-## 🎯 Overview
+It answers one question: **what free-cash-flow growth does today's price imply, and how
+sensitive is that answer to my assumptions?** It can also value a stock for a growth rate, a
+discount rate, and a terminal growth rate that you choose.
 
-This toolkit implements sophisticated DCF valuation with Monte Carlo simulation, market regime detection, and Black-Litterman portfolio optimization. Built for fundamental analysts and value investors who need rigorous cash flow analysis combined with quantitative portfolio construction.
+It is a thinking aid. It does not give buy or sell signals and it does not rank stocks.
 
-## ✨ Key Features
+## Install
 
-### 📊 DCF Valuation Engine
-- **Free Cash Flow Projection**: 5-year forecasts with analyst estimates
-- **WACC Calculation**: CAPM-based with sector-specific betas
-- **Terminal Value Methods**: Perpetuity growth & exit multiples
-- **Monte Carlo Simulation**: 5,000-10,000 iterations for probabilistic valuation
-- **Reverse DCF**: Calculate implied growth rates from current price
-- **Sensitivity Analysis**: Stress testing across growth/WACC scenarios
-- **EV/Sales Fallback**: Relative valuation for negative FCF companies
-- **⚡ Parallel Data Fetching**: 5-10x faster multi-stock analysis with ThreadPoolExecutor
-
-### 💼 Portfolio Optimization
-- **Black-Litterman Framework**: Bayesian optimization with DCF-derived views
-- **Market Regime Detection**: Bull/Bear/Transition classification
-- **Multiple Objectives**: Max Sharpe, Min Volatility, Max Quadratic Utility
-- **Position Sizing**: Optimal weights with conviction-based allocation
-
-### 🎨 Interactive CLI
-- **Rich Terminal UI**: Beautiful tables and formatted output
-- **Command Mode**: Script-friendly for automation
-- **Multi-Stock Comparison**: Side-by-side valuation analysis
-- **CSV Export**: Results export for further analysis
-
-## 🚀 Quick Start
-
-### Installation
-
-This project uses [UV](https://docs.astral.sh/uv/) for fast, reliable Python package management.
+Python 3.12 or newer and [uv](https://docs.astral.sh/uv/) are required.
 
 ```bash
-# Clone the repository
-git clone https://github.com/JustR3/dcf-valuation.git
-cd dcf-valuation
-
-# Install UV if you haven't already
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Sync dependencies (creates .venv automatically)
-uv sync
+uv sync --extra dev
+uv run dcf --help
 ```
 
-### Usage
+## Set up `.env`
 
-**Single Stock Valuation:**
-```bash
-uv run python main.py valuation AAPL
-```
-
-**Multi-Stock Comparison:**
-```bash
-# Uses parallel fetching automatically (5-10x faster!)
-uv run python main.py compare AAPL MSFT GOOGL AMZN
-
-# Test performance improvement
-uv run python test_parallel_performance.py
-```
-
-**Portfolio Optimization:**
-```bash
-uv run python main.py portfolio AAPL MSFT GOOGL --method max_sharpe
-```
-
-### Development
+The risk-free rate comes from FRED (series `DGS10`). Get a free key at
+<https://fred.stlouisfed.org/docs/api/api_key.html>, then:
 
 ```bash
-# Install with dev dependencies
-uv sync --all-extras
-
-# Run tests
-uv run pytest tests/ -v
-
-# Run linter
-uv run ruff check src/
-
-# Format code
-uv run ruff format src/
+cp .env.example .env
 ```
 
-## � Data Management
+Edit `.env` and set `FRED_API_KEY=<your key>`. Run `dcf` from the folder that holds `.env`. You do
+not need a key when you pass `--rf` yourself. Never commit `.env`.
 
-The `data/` folder (545MB, 681 files) is **excluded from git** to keep the repository lightweight. All data is regenerable using the provided download scripts.
-
-### First-Time Setup
+## Commands
 
 ```bash
-# Download all historical data (~30 seconds for 48 stocks)
-uv run python scripts/download_full_history.py
-
-# Verify data download
-ls -lh data/cache/  # Should see 48+ JSON files
+uv run dcf implied KO
+uv run dcf implied KO --years 10 --terminal-growth 2.5 --erp 5.0 --json
+uv run dcf implied KO --model fcff --fade
+uv run dcf implied AAPL --model fcff
+uv run dcf implied KO --rf 4.2 --beta 0.6
+uv run dcf value KO --growth 6 --discount-rate 8.5
+uv run dcf value KO --growth 6 --fade --model fcff
+uv run dcf grid KO
+uv run dcf grid KO --model fcff --fade --json
 ```
 
-### Running Backtests
+- `implied`: solve for the growth rate that makes the model value equal the market price.
+  With `--fade` the answer is the *implied starting growth*.
+- `value`: value per share for the `--growth` you give, with upside versus the price.
+- `grid`: implied growth for discount rate (base -2, -1, 0, +1, +2 points) by terminal growth
+  (1.5%, 2.5%, 3.5%). A cell shows `< -50%` or `> 100%` when no root exists inside the search
+  range of -50% to +100%.
+
+Every command prints its inputs with sources and as-of dates (price date, latest quarter end,
+balance sheet date, FRED date), the model name, the rate breakdown, warnings, and the result. `--json` prints the same
+content as JSON: dates are ISO strings and numbers are decimals (0.05 = 5%).
+
+Exit code `0` means success. Exit code `2` means a refusal or an input error, with one line on
+stderr:
 
 ```bash
-# Quick pilot backtest (5 stocks, 5 years, ~2 minutes)
-uv run python scripts/run_pilot_backtest.py
-
-# Full backtest (48 stocks, 20 years, ~15 minutes)
-uv run python scripts/run_full_backtest.py
+uv run dcf implied JPM   # exit 2
 ```
 
-### Data Download Scripts
+## Flags
 
-- **`scripts/download_full_history.py`**: Downloads complete dataset (48 stocks, 20 years)
-- **`scripts/download_pilot_data.py`**: Downloads pilot subset (5 stocks, 5 years)  
-- **`scripts/estimate_data_download.py`**: Estimates download time and coverage
+Percent flags take percent: `--erp 5` means 5%.
 
-**Why data/ is excluded:**
-- Large size (545MB) slows cloning and increases repo size
-- User-specific data preferences (e.g., different stock universes)
-- Data is rapidly regenerable via scripts (~30 seconds)
-- Keeps git history clean and focused on code changes
+| Flag | Meaning | Default |
+|---|---|---|
+| `--model equity\|fcff` | Cash-flow model | `equity` |
+| `--fade` | Growth falls linearly from the start rate to terminal growth | constant growth |
+| `--years N` | Explicit forecast years (1 to 30) | 10 |
+| `--terminal-growth` | Terminal growth, percent (`implied`, `value`) | 2.5 |
+| `--erp` | Equity risk premium, percent | 5.0 |
+| `--beta` | Beta. Required when yfinance has none | yfinance `info.beta` |
+| `--rf` | Risk-free rate, percent. Skips FRED | FRED `DGS10` |
+| `--discount-rate` | Replace the computed discount rate, percent | Ke or WACC |
+| `--tax-rate` | `fcff`: tax rate, percent | TTM tax / TTM pretax income |
+| `--kd` | `fcff`: pre-tax cost of debt, percent | TTM interest / total debt |
+| `--fcf` | Base TTM free cash flow, in millions | TTM from the filings |
+| `--shares` | Shares outstanding, in millions | latest quarterly count |
+| `--growth` | `value` only: growth rate, percent | required |
+| `--json` | Print JSON | text |
+| `--force` | Run Financial Services companies anyway, with a warning | off |
+| `--allow-stale` | Continue with stale data, with a warning | off |
 
-## �📦 Project Structure
+## Model
+
+One discounting core serves both models. `CF_0` is the base cash flow, `g_t` is the growth path,
+`r` is the discount rate and `g_T` is the terminal growth.
 
 ```
-dcf-valuation/
-├── main.py                    # Lightweight CLI entry point
-├── src/
-│   ├── __init__.py            # Package exports
-│   ├── config.py              # Configuration constants
-│   ├── dcf_engine.py          # Core DCF valuation engine
-│   ├── portfolio.py           # DCF-aware portfolio optimizer
-│   ├── optimizer.py           # Black-Litterman implementation
-│   ├── regime.py              # Market regime detection + CAPE analysis
-│   ├── utils.py               # Caching & rate limiting
-│   ├── exceptions.py          # Custom exception hierarchy
-│   ├── validation.py          # Pydantic input validation models
-│   ├── data_validator.py      # yfinance data validation layer
-│   ├── logging_config.py      # Structured logging framework
-│   ├── cli/                   # CLI module (Rich + Questionary)
-│   │   ├── __init__.py
-│   │   ├── commands.py        # Command handlers (valuation, compare, portfolio)
-│   │   ├── display.py         # Rich formatting utilities
-│   │   └── interactive.py     # Interactive mode prompts
-│   └── external/              # External data integrations
-│       ├── __init__.py
-│       ├── damodaran.py       # NYU Damodaran industry data
-│       ├── fred.py            # FRED macro indicators
-│       └── shiller.py         # Yale Shiller CAPE ratios
-├── data/cache/                # Cached financial data (JSON/Parquet)
-├── tests/                     # Comprehensive test suite (58+ tests)
-│   ├── test_basic.py          # Core engine tests
-│   ├── test_validation.py     # Validation & exception tests
-│   └── ...
-├── docs/                      # Integration documentation
-├── README.md
-├── LICENSE
-└── pyproject.toml
+CF_t = CF_{t-1} * (1 + g_t)          t = 1..N
+TV_N = CF_N * (1 + g_T) / (r - g_T)
+PV   = sum CF_t / (1 + r)^t  +  TV_N / (1 + r)^N
 ```
 
-### Architecture Highlights
+- Constant path: `g_t = g`. Fade path: `g_t = g + (g_T - g) * (t - 1) / (N - 1)`.
+- There is no terminal-value cap. The output shows the terminal share of value.
+- `equity` (default): base = TTM levered FCF. `r` = cost of equity = rf + beta x ERP. Equity
+  value = PV.
+- `fcff`: base = TTM levered FCF + TTM interest x (1 - t). `r` = WACC =
+  E/(D+E) x Ke + D/(D+E) x Kd x (1 - t), with E = price x shares and D = latest total debt.
+  Equity value = PV - net debt (total debt - cash).
+- TTM levered FCF = sum of the last 4 quarters of (Operating Cash Flow - |Capital Expenditure|).
+  The four quarters must be consecutive.
+- Implied growth is found with `scipy.optimize.brentq` on g in [-50%, +100%]. Value per share
+  increases with g, so the root is unique.
 
-- **Modular CLI**: Separated from business logic for testability
-- **Custom Exceptions**: `DCFError` hierarchy with `to_dict()` serialization
-- **Pydantic Validation**: Type-safe input validation for all parameters
-- **Structured Logging**: Colored console output, JSON format option, performance decorators
-- **Data Validation**: yfinance response sanitization with automatic fallbacks
+## Refusals (exit code 2)
 
-## 🔬 Methodology
+- TTM FCF is zero or negative: "DCF needs positive TTM FCF". There is no fallback method.
+- Sector is Financial Services (banks, insurers): FCF is not meaningful. `--force` overrides.
+- The discount rate is not above terminal growth, or fewer than 4 quarters of cash-flow data.
+- `--model fcff` and the balance sheet has no Total Debt.
+- Beta is missing from yfinance and `--beta` is not given.
+- `FRED_API_KEY` is not set and `--rf` is not given.
+- Price currency differs from the financial statement currency (yfinance `currency` and
+  `financialCurrency`). There is no override flag.
+- The price date is more than 1 day after today.
+- A data source fails (yfinance error, FRED HTTP or network error, malformed FRED row).
+- A growth rate (`--growth`, `--terminal-growth`) is -100% or lower.
+- Stale data: latest quarter end older than 200 days, price older than 7 days, FRED observation
+  older than 10 days. `--allow-stale` continues and prints a warning with the date.
 
-### DCF Calculation
+## Limits
 
-1. **Free Cash Flow (FCF)**: Extracted from company financials (TTM)
-2. **Growth Rates**: Analyst estimates + Bayesian prior cleaning
-3. **WACC**: Risk-free rate + Beta × Market risk premium
-4. **PV of FCF**: Discount projected cash flows
-5. **Terminal Value**: Perpetuity growth method
-6. **Fair Value**: Sum of PV(FCF) + PV(Terminal Value) / Shares Outstanding
+- **equity vs fcff.** The two models give different answers for the same stock. `equity` is
+  simple and uses cost of equity; it fits companies with stable, small debt. `fcff` adds back
+  after-tax interest and subtracts net debt, so it fits companies with large debt. It uses book
+  debt in WACC, which adds model error. The output always names the model.
+- **Fallbacks, always shown as warnings.** Tax rate 21% when pretax income is zero or negative
+  or a row is missing. Interest 0 in the FCFF base when the row is missing (for example AAPL).
+  Kd = rf + 1.5% when interest is missing or debt is 0. Cash = 0 when no cash row exists.
+  Shares fall back to `info.sharesOutstanding`.
+- **Split check.** If the balance-sheet share count and `info.sharesOutstanding` differ by more
+  than a factor of 1.5, a warning names both counts: a split may have happened after the quarter
+  end.
+- **Older columns.** When a TTM sum, the share count, debt or cash uses a quarter older than the
+  newest column of its table, a warning names the row and the date used. The balance sheet date
+  of the debt and share values is printed with the inputs.
+- **Price.** The price is the latest close that yfinance returns. It may be an intraday value
+  while the market is open. Its date is printed.
+- **`--discount-rate` with `equity`.** The risk-free rate is not used, so the tool does not
+  call FRED, does not need `FRED_API_KEY`, and shows the risk-free rate as "not used". The
+  `fcff` model still needs it.
+- **Leases in debt.** yfinance "Total Debt" may include lease liabilities, so FCFF net debt can
+  double-count leases. The `equity` model is not affected.
+- **Beta is not clipped.** A very low beta (KO is about 0.3) gives a low discount rate and a high
+  terminal share of value. Judge the result with `grid`.
+- **Financials.** Card networks and brokers can pass the sector check but still have unreliable
+  FCF. The output shows the sector.
+- **Negative TTM FCF.** The tool refuses it, unless you pass your own positive `--fcf`. Then the
+  output shows a warning with the reported TTM FCF.
+- Data comes from yfinance (price, statements) and FRED (rate). Names of yfinance rows can
+  change; the offline tests use recorded fixtures.
 
-### Monte Carlo Simulation
-
-Simulates 5,000+ scenarios varying:
-- Growth rates (±20% volatility)
-- WACC (±10% volatility)
-- Terminal growth (±5% volatility)
-
-Provides probabilistic range: 10th/90th percentiles, mean, median, std dev.
-
-### Portfolio Optimization
-
-1. **Historical Returns**: Fetch price data (1-year lookback)
-2. **DCF Views**: Convert upside % to expected return views
-3. **Market Regime**: Adjust confidence based on bull/bear state
-4. **Black-Litterman**: Combine market equilibrium + DCF views
-5. **Optimize**: Max Sharpe ratio with constraints (max 30% per position)
-
-## 🧪 Testing
+## Tests
 
 ```bash
-# Run all tests
-uv run pytest tests/ -v
-
-# Run with coverage report
-uv run pytest tests/ --cov=src --cov-report=term-missing
-
-# Run specific test module
-uv run pytest tests/test_validation.py -v
+uv run pytest -q
+uv run ruff check .
 ```
 
-### Test Coverage
-
-| Module | Description | Tests |
-|--------|-------------|-------|
-| `test_basic.py` | Core engine, config, caching | 19 |
-| `test_validation.py` | Exceptions, Pydantic models, data validation | 39 |
-| `test_external_integrations.py` | FRED, Shiller, Damodaran | 5+ |
-
-## 📊 Example Output
-
-```
-╭────────────────────────────────────────╮
-│ DCF Valuation: AAPL                    │
-├─────────────────────┬──────────────────┤
-│ Metric              │            Value │
-├─────────────────────┼──────────────────┤
-│ Current Price       │          $175.50 │
-│ Fair Value (DCF)    │          $198.32 │
-│ Upside              │          +13.01% │
-│ WACC                │            8.50% │
-│                     │                  │
-│ Monte Carlo (5,000) │                  │
-│   Mean              │          $195.78 │
-│   Median            │          $197.12 │
-│   10th Percentile   │          $165.44 │
-│   90th Percentile   │          $225.91 │
-╰─────────────────────┴──────────────────╯
-
-Conviction: Buy
-```
-
-## ⚙️ Configuration
-
-Edit [src/config.py](src/config.py) to customize:
-
-- Monte Carlo iterations (default: 5,000)
-- Growth rate bounds (-50% to +100%)
-- WACC parameters (risk-free rate, market premium)
-- Terminal growth rate (default: 2.5%)
-- Sector-specific exit multiples
-- Portfolio constraints (max 30% per position)
-
-## 📚 Data Sources
-
-- **yfinance**: Company financials, prices, analyst estimates
-- **Consolidated Cache**: Single Parquet file per ticker (24h expiry)
-- **Rate Limiting**: 60 calls/minute to respect API limits
-
-## 🔧 Advanced Features
-
-### Reverse DCF
-Calculate implied growth rate from current market price:
-```python
-from src.dcf_engine import DCFEngine
-engine = DCFEngine("AAPL")
-implied_growth = engine.reverse_dcf(target_price=175.50)
-```
-
-### Scenario Analysis
-Test Bull/Base/Bear cases:
-```python
-scenarios = engine.scenario_analysis()
-# Returns: {bull: {...}, base: {...}, bear: {...}}
-```
-
-### Sensitivity Heatmap
-Stress test across growth/WACC ranges:
-```python
-sensitivity = engine.sensitivity_analysis()
-# 2D grid of fair values
-```
-
-## 🙏 Acknowledgments
-
-This project builds upon the foundational work of leading academics and researchers in finance and valuation:
-
-### Academic Data Sources
-
-- **[Professor Aswath Damodaran](https://pages.stern.nyu.edu/~adamodar/)** (NYU Stern School of Business)  
-  Industry-level statistics including levered/unlevered betas, operating margins, and revenue growth rates across 96 industries. Professor Damodaran's datasets provide the academic "ground truth" for sector benchmarking and are updated quarterly. His work on corporate finance and valuation is widely considered the gold standard in the field.
-
-- **[Professor Robert Shiller](http://www.econ.yale.edu/~shiller/data.htm)** (Yale University, Nobel Laureate)  
-  Cyclically Adjusted Price-to-Earnings (CAPE) ratio dataset spanning over 140 years of US stock market history. The Shiller CAPE ratio is used to adjust WACC based on market valuation states, providing dynamic risk adjustment for different market conditions. Professor Shiller's pioneering work on market efficiency and behavioral finance earned him the Nobel Prize in Economics (2013).
-
-### Data Attribution
-
-All external data sources are used in accordance with their respective terms and are cited for academic and research purposes. Real-time financial data is sourced from:
-- **Federal Reserve Economic Data (FRED)** for macroeconomic indicators
-- **Yahoo Finance** via the yfinance library for company fundamentals
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-**Disclaimer:** This tool is for educational and research purposes only. It does not constitute financial advice, investment recommendations, or an offer to buy or sell securities. Always conduct your own due diligence and consult with qualified financial professionals before making investment decisions. Past performance does not guarantee future results.
+The test suite runs offline. A guard in `tests/conftest.py` fails any test that opens a network
+socket unless it is marked `integration`. `tests/test_readme_commands.py` runs every
+`uv run dcf` example in this file.
