@@ -60,8 +60,7 @@ config/secrets.env
 config/secrets.env.backup
 
 
-# .github
-.github/
+# .github (workflows are tracked; local agent notes are not)
 .github/copilot-instructions.md
 
 # Local secrets (never commit)

@@ -165,3 +165,6 @@ uv run ruff check .
 The test suite runs offline. A guard in `tests/conftest.py` fails any test that opens a network
 socket unless it is marked `integration`. `tests/test_readme_commands.py` runs every
 `uv run dcf` example in this file.
+
+CI (`.github/workflows/test.yml`) runs the same two commands on every push to `main` and every
+pull request. It needs no secrets.
