@@ -11,3 +11,4 @@ One line per completed plan task, newest last.
 - 2026-10-22: task 6 — pyproject 2.0.0 with 6 runtime deps and dcf entry point, uv.lock, offline socket guard in tests/conftest.py.
 - 2026-10-22: task 7 — README rewritten as the owner doc; tests/test_readme_commands.py runs every documented command.
 - 2026-10-22: task 8 — reviewer findings triaged and applied (185 tests); live check: AAPL/KO/XOM ok in both models with current dates, JPM refused (financials), TSM refused (currency).
+- 2026-10-24: CI — added .github/workflows/test.yml (offline pytest + ruff check, permissions: contents: read); .gitignore now tracks workflows.
